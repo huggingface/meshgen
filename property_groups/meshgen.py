@@ -30,13 +30,6 @@ class MeshGenProperties(bpy.types.PropertyGroup):
             min=0.0,
             max=1.0,
         ),
-        "max_new_tokens": bpy.props.IntProperty(
-            name="Max New Tokens",
-            description="The maximum number of new tokens to generate.",
-            default=4096,
-            min=1024,
-            max=16384,
-        ),
         "vertices_generated": bpy.props.IntProperty(
             name="Vertices Generated",
             description="The number of vertices generated.",

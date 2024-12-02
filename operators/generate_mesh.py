@@ -1,6 +1,8 @@
 import bmesh
 import bpy
+import queue
 import sys
+import threading
 import traceback
 
 from ..generator.generator import Generator
@@ -38,6 +40,27 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         )
 
         props.is_running = True
+        self._queue = queue.Queue()
+
+        def run_in_thread():
+            try:
+                for chunk in generator.llm.create_chat_completion(
+                    messages=messages,
+                    stream=True,
+                    temperature=props.temperature
+                ):
+                    if props.cancelled:
+                        return
+                    self._queue.put(chunk)
+                self._queue.put(None)
+            except Exception as e:
+                print(e, file=sys.stderr)
+                traceback.print_exc()
+                self._queue.put(None)
+
+        self._thread = threading.Thread(target=run_in_thread)
+        self._thread.start()
+
         self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -53,9 +76,16 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         if event.type == "TIMER":
             new_tokens = False
             try:
-                for chunk in self._iterator:
-                    self.generated_text += chunk.choices[0].delta.content
-                    self.line_buffer += chunk.choices[0].delta.content
+                while not self._queue.empty():
+                    chunk = self._queue.get_nowait()
+                    if chunk is None:
+                        break
+                    delta = chunk["choices"][0]["delta"]
+                    if "content" not in delta:
+                        continue
+                    content = delta["content"]
+                    self.generated_text += content
+                    self.line_buffer += content
                     props.generated_text = self.generated_text
                     new_tokens = True
 
@@ -75,9 +105,10 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
             if new_tokens:
                 self.redraw(context)
         
-            if not new_tokens and self.line_buffer:
-                self.process_line(self.line_buffer.strip(), context)
-                self.update_mesh(context)
+            if not self._thread.is_alive() and self._queue.empty():
+                if self.line_buffer:
+                    self.process_line(self.line_buffer.strip(), context)
+                    self.update_mesh(context)
                 props.is_running = False
                 context.window_manager.event_timer_remove(self._timer)
                 self.bmesh.free()

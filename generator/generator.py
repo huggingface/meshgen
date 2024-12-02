@@ -2,7 +2,6 @@ import os
 import sys
 import traceback
 
-
 from ..operators.install_dependencies import load_dependencies
 from ..utils import absolute_path
 
@@ -12,10 +11,9 @@ class Generator:
 
     def __new__(cls):
         if not cls._instance:
-            with cls._lock:
-                if not cls._instance:
-                    cls._instance = super(Generator, cls).__new__(cls)
-                    cls._instance.initialized = False
+            if not cls._instance:
+                cls._instance = super(Generator, cls).__new__(cls)
+                cls._instance.initialized = False
         return cls._instance
     
     def __init__(self):
@@ -24,7 +22,7 @@ class Generator:
         self.required_models = [
             {
                 "repo_id": "bartowski/LLaMA-Mesh-GGUF",
-                "filename": "LLaMA-Mesh-Q5_K_M.gguf"
+                "filename": "LLaMA-Mesh-Q4_K_M.gguf"
             }
         ]
         self.downloaded_models = []
@@ -73,28 +71,14 @@ class Generator:
         self._ensure_dependencies()
 
         try:
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+            import llama_cpp
 
-            if torch.cuda.is_available():
-                self.device = "cuda"
-                print("Using CUDA")
-            elif torch.backends.mps.is_available():
-                self.device = "mps"
-                print("Using MPS")
-            else:
-                print("Running on CPU")
-
-            model_path = "Zhengyi/LLaMa-Mesh"
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            self.pipeline = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.bfloat16,
-            ).to(self.device)
-            self.terminators = [
-                self.tokenizer.eos_token_id,
-                self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-            ]
+            self.llm = llama_cpp.Llama(
+                model_path=absolute_path(".models/LLaMA-Mesh-Q4_K_M.gguf"),
+                n_gpu_layers=-1,
+                seed=1337,
+                n_ctx=4096,
+            )
 
             print("Finished loading generator.")
 
