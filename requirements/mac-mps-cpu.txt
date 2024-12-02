@@ -1,4 +1,2 @@
---extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
-llama-cpp-python
-
-huggingface_hub
+--index-url https://abetlen.github.io/llama-cpp-python/whl/metal
+llama-cpp-python==0.2.90

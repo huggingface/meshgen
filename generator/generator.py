@@ -47,8 +47,7 @@ class Generator:
         self.downloaded_models = models
     
     def _ensure_dependencies(self):
-        if not self.dependencies_installed:
-            self.dependencies_installed = len(os.listdir(absolute_path(".python_dependencies"))) > 2
+        self.dependencies_installed = len(os.listdir(absolute_path(".python_dependencies"))) > 2
 
         if self.dependencies_installed and not self.dependencies_loaded:
             load_dependencies()
