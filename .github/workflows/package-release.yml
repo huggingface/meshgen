@@ -10,6 +10,9 @@ jobs:
     strategy:
       matrix:
         platform:
+          - requirements: cpu.txt
+            os: any
+            filename: cpu
           - requirements: win-linux-cuda.txt
             os: windows-latest
             filename: windows-cuda

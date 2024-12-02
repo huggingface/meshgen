@@ -1,5 +1,4 @@
---extra-index-url https://download.pytorch.org/whl/cu121
-torch
-torchvision
-torchaudio
-transformers
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+llama-cpp-python
+
+huggingface_hub
