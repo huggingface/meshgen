@@ -1,2 +1,4 @@
---index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
 llama-cpp-python==0.2.90
+
+huggingface_hub

@@ -21,4 +21,3 @@ class MESHGEN_PT_Settings(bpy.types.Panel):
         props = context.scene.meshgen_props
 
         layout.prop(props, "temperature")
-        layout.prop(props, "max_new_tokens")

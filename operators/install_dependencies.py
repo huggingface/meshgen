@@ -84,12 +84,14 @@ def load_dependencies():
             os.add_dll_directory(mkl_bin)
 
 
-def install_and_load_dependencies():
+def clear_modules():
     module_name = os.path.basename(os.path.dirname(__file__))
-    def clear_modules():
-        for name in list(sys.modules.keys()):
-            if name.startswith(module_name) and name != module_name:
-                del sys.modules[name]
+    for name in list(sys.modules.keys()):
+        if name.startswith(module_name) and name != module_name:
+            del sys.modules[name]
+
+
+def install_and_load_dependencies():
     clear_modules()
 
     install_pip()
@@ -110,24 +112,6 @@ def install_and_load_dependencies():
 
     os.makedirs(dependencies_dir, exist_ok=True)
 
-    # Install universal requirements
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "huggingface_hub",
-            "--upgrade",
-            "--no-cache-dir",
-            "--target",
-            dependencies_dir,
-        ],
-        check=True,
-        cwd=os.path.dirname(__file__),
-    )
-
-    # Install platform-specific requirements
     subprocess.run(
         [
             sys.executable,
@@ -138,7 +122,6 @@ def install_and_load_dependencies():
             requirements_file,
             "--upgrade",
             "--no-cache-dir",
-            "--no-deps",
             "--target",
             dependencies_dir,
         ],
@@ -181,6 +164,8 @@ class MESHGEN_OT_UninstallDependencies(bpy.types.Operator):
             elif os.path.isdir(item_path):
                 shutil.rmtree(item_path)
             print(f"Uninstalled {item}")
+
+        clear_modules()
 
         print("Finished uninstalling dependencies")
 
