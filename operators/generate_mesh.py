@@ -1,9 +1,7 @@
 import bmesh
 import bpy
-import queue
 import sys
 import traceback
-from threading import Thread
 
 from ..generator.generator import Generator
 
@@ -14,8 +12,6 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
     bl_options = {"REGISTER", "INTERNAL"}
 
     def execute(self, context):
-        from transformers import StoppingCriteria, TextIteratorStreamer
-
         props = context.scene.meshgen_props
         props.cancelled = False
         props.vertices_generated = 0
@@ -28,39 +24,20 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         self.bmesh = bmesh.new()
 
         generator = Generator.instance()
-        conversation = [
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant that can generate 3D obj files."},
             {"role": "user", "content": props.prompt}
         ]
-        input_ids = generator.tokenizer.apply_chat_template(conversation, return_tensors="pt").to(
-            generator.device
-        )
         self.generated_text = ""
         self.line_buffer = ""
 
-        class CancelStoppingCriteria(StoppingCriteria):
-            def __call__(self, input_ids, scores, **kwargs):
-                return props.cancelled
-            
-        stopping_criteria = CancelStoppingCriteria()
-        self._streamer = TextIteratorStreamer(generator.tokenizer, timeout=10.0, skip_prompt=True, skip_special_tokens=True)
-
-        kwargs = dict(
-            input_ids=input_ids,
-            streamer=self._streamer,
-            do_sample=False,
-            temperature=props.temperature,
-            max_new_tokens=props.max_new_tokens,
-            eos_token_id=generator.terminators,
-            stopping_criteria=[stopping_criteria],
+        self._iterator = generator.llm.create_chat_completion(
+            messages=messages,
+            stream=True,
+            temperature=props.temperature
         )
 
-        def generation_thread():
-            generator.pipeline.generate(**kwargs)
-
-        self._thread = Thread(target=generation_thread)
         props.is_running = True
-        self._thread.start()
-
         self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -76,12 +53,9 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         if event.type == "TIMER":
             new_tokens = False
             try:
-                while True:
-                    next_token = self._streamer.text_queue.get_nowait()
-                    if next_token is None:
-                        break
-                    self.generated_text += next_token
-                    self.line_buffer += next_token
+                for chunk in self._iterator:
+                    self.generated_text += chunk.choices[0].delta.content
+                    self.line_buffer += chunk.choices[0].delta.content
                     props.generated_text = self.generated_text
                     new_tokens = True
 
@@ -90,8 +64,6 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
                         for line in lines[:-1]:
                             self.process_line(line.strip(), context)
                         self.line_buffer = lines[-1]
-            except queue.Empty:
-                pass
             except Exception as e:
                 print(e, file=sys.stderr)
                 traceback.print_exc()
@@ -103,9 +75,8 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
             if new_tokens:
                 self.redraw(context)
         
-            if not self._thread.is_alive() and self._streamer.text_queue.empty():
-                if self.line_buffer:
-                    self.process_line(self.line_buffer.strip(), context)
+            if not new_tokens and self.line_buffer:
+                self.process_line(self.line_buffer.strip(), context)
                 self.update_mesh(context)
                 props.is_running = False
                 context.window_manager.event_timer_remove(self._timer)
