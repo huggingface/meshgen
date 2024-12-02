@@ -24,7 +24,7 @@ class MESHGEN_OT_DownloadRequiredModels(bpy.types.Operator):
             return
 
         for model in models_to_download:
-            print(f"Downloading model: {model}")
-            snapshot_download(model)
+            print(f"Downloading model: {model['repo_id']}:{model['filename']}")
+            snapshot_download(model["repo_id"], filename=model["filename"])
             generator._list_downloaded_models()
         return {"FINISHED"}

@@ -1,8 +1,6 @@
-import json
 import os
 import sys
 import traceback
-from threading import Lock
 
 
 from ..operators.install_dependencies import load_dependencies
@@ -11,7 +9,6 @@ from ..utils import absolute_path
 
 class Generator:
     _instance = None
-    _lock = Lock()
 
     def __new__(cls):
         if not cls._instance:
@@ -24,38 +21,30 @@ class Generator:
     def __init__(self):
         if self.initialized:
             return
-        self.required_models = ["Zhengyi/LLaMa-Mesh"]
+        self.required_models = [
+            {
+                "repo_id": "bartowski/LLaMA-Mesh-GGUF",
+                "filename": "LLaMA-Mesh-Q5_K_M.gguf"
+            }
+        ]
         self.downloaded_models = []
         self.dependencies_installed = False
         self.dependencies_loaded = False
-        self.device = "cpu"
-        self.tokenizer = None
-        self.pipeline = None
-        self.terminators = []
+        self.llm = None
         self.initialized = True
 
-    def _process_model_dir(self, dir_name):
-        from huggingface_hub.constants import HF_HUB_CACHE
-
-        model_dir = os.path.join(HF_HUB_CACHE, dir_name)
-        if not os.path.isdir(model_dir):
-            return None
-        model_name = os.path.basename(model_dir).replace("models--", "").replace("--", "/")
-        return model_name
-
     def _list_downloaded_models(self):
-        from huggingface_hub.constants import HF_HUB_CACHE
-
         models = []
 
-        if not os.path.exists(HF_HUB_CACHE):
+        models_dir = absolute_path(".models")
+
+        if not os.path.exists(models_dir):
             self.downloaded_models = models
             return
 
-        for dir_name in os.listdir(HF_HUB_CACHE):
-            model_name = self._process_model_dir(dir_name)
-            if model_name:
-                models.append(model_name)
+        for filename in os.listdir(models_dir):
+            if filename.endswith(".gguf"):
+                models.append(filename)
 
         self.downloaded_models = models
     
@@ -73,10 +62,10 @@ class Generator:
     
     def has_required_models(self):
         self._list_downloaded_models()
-        return all(model in self.downloaded_models for model in self.required_models)
+        return all(model["filename"] in self.downloaded_models for model in self.required_models)
     
     def is_generator_loaded(self):
-        return self.pipeline is not None
+        return self.llm is not None
 
     def load_generator(self):
         print("Loading generator...")
