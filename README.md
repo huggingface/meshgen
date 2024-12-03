@@ -11,7 +11,7 @@ This initial release contains a minimal integration of [LLaMa-Mesh](https://gith
 Go to the [Latest Release](https://github.com/huggingface/meshgen/releases/latest) page for a download link and installation instructions.
 
 # Setup
-- In `MeshGen` addon preferences, click `Download Required Models`
+- In `MeshGen` addon preferences, click `Download Required Models`. If the automatic download fails, download the models directly from [HuggingFace repo](https://huggingface.co/Zhengyi/LLaMA-Mesh).
 - If set up correctly, addon preferences should display the message `Ready to generate. Press 'N' -> MeshGen to get started.'
 
 # Usage
