@@ -1,72 +1,74 @@
 name: Package Release
 on:
-  push:
-    branches:
-      - "releases/**"
-  workflow_dispatch:
+    push:
+        branches:
+            - "releases/**"
+    workflow_dispatch:
 
 jobs:
-  package-release:
-    strategy:
-      matrix:
-        platform:
-          - filename: cpu-win64
-            os: windows-latest
-            requirements: cpu.txt
-          - filename: cuda-win64
-            os: windows-latest
-            requirements: cuda.txt
+    package-release:
+        strategy:
+            matrix:
+                platform:
+                    - filename: cpu-win64
+                      os: windows-latest
+                      requirements: cpu.txt
+                      args: ""
 
-          - filename: cpu-macos-arm
-            os: macos-latest
-            requirements: cpu.txt
-          - filename: cuda-macos-arm
-            os: macos-latest
-            requirements: cuda.txt
+                    - filename: cuda-win64
+                      os: windows-latest
+                      requirements: cuda.txt
+                      args: "--only-binary=llama_cpp_python"
 
-          - filename: cpu-macos-x86
-            os: macos-13
-            requirements: cpu.txt
-          - filename: cuda-macos-x86
-            os: macos-13
-            requirements: cuda.txt
+                    - filename: cpu-macos-arm
+                      os: macos-latest
+                      requirements: cpu.txt
+                      args: ""
 
-          - filename: cpu-linux
-            os: ubuntu-latest
-            requirements: cpu.txt
-          - filename: cuda-linux
-            os: ubuntu-latest
-            requirements: cuda.txt
-    runs-on: ${{ matrix.platform.os }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          path: meshgen
-      
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+                    - filename: cpu-macos-x86
+                      os: macos-13
+                      requirements: cpu.txt
+                      args: ""
 
-      - name: Upgrade pip
-        shell: bash
-        run: "python -m pip install --upgrade setuptools pip"
+                    - filename: cpu-linux
+                      os: ubuntu-latest
+                      requirements: cpu.txt
+                      args: ""
 
-      - name: Install dependencies
-        shell: bash
-        run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} --no-cache-dir --target .python_dependencies"
-        working-directory: meshgen
-      
-      - name: Archive release
-        uses: thedoctor0/zip-release@main
-        with:
-          type: zip
-          filename: meshgen-${{ matrix.platform.filename }}.zip
-          exclusions: '*.git*'
-      
-      - name: Archive and upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: meshgen-${{ matrix.platform.filename }}
-          path: meshgen-${{ matrix.platform.filename }}.zip
+                    - filename: cuda-linux
+                      os: ubuntu-latest
+                      requirements: cuda.txt
+                      args: "--only-binary=llama_cpp_python"
+        runs-on: ${{ matrix.platform.os }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  path: meshgen
+
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Upgrade pip
+              shell: bash
+              run: "python -m pip install --upgrade setuptools pip"
+
+            - name: Install dependencies
+              shell: bash
+              run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} ${{ matrix.platform.args }} --no-cache-dir --target .python_dependencies"
+              working-directory: meshgen
+
+            - name: Archive release
+              uses: thedoctor0/zip-release@main
+              with:
+                  type: zip
+                  filename: meshgen-${{ matrix.platform.filename }}.zip
+                  exclusions: "*.git*"
+
+            - name: Archive and upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: meshgen-${{ matrix.platform.filename }}
+                  path: meshgen-${{ matrix.platform.filename }}.zip
