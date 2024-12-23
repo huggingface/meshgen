@@ -2,7 +2,7 @@ bl_info = {
     "name": "MeshGen",
     "description": "A Blender addon for generating meshes with AI",
     "author": "Hugging Face",
-    "version": (0, 3, 0),
+    "version": (0, 3, 1),
     "blender": (4, 1, 0),
     "category": "Mesh",
     "support": "COMMUNITY",
