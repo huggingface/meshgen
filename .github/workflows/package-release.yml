@@ -10,11 +10,32 @@ jobs:
     strategy:
       matrix:
         platform:
-          - filename: cpu
+          - filename: cpu-win64
             os: windows-latest
             requirements: cpu.txt
-          - filename: cuda
+          - filename: cuda-win64
             os: windows-latest
+            requirements: cuda.txt
+
+          - filename: cpu-macos-arm
+            os: macos-latest
+            requirements: cpu.txt
+          - filename: cuda-macos-arm
+            os: macos-latest
+            requirements: cuda.txt
+
+          - filename: cpu-macos-x86
+            os: macos-13
+            requirements: cpu.txt
+          - filename: cuda-macos-x86
+            os: macos-13
+            requirements: cuda.txt
+
+          - filename: cpu-linux
+            os: ubuntu-latest
+            requirements: cpu.txt
+          - filename: cuda-linux
+            os: ubuntu-latest
             requirements: cuda.txt
     runs-on: ${{ matrix.platform.os }}
     steps:
@@ -34,7 +55,7 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} --only-binary=llama_cpp_python --no-cache-dir --target .python_dependencies"
+        run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} --no-cache-dir --target .python_dependencies"
         working-directory: meshgen
       
       - name: Archive release
