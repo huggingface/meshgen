@@ -105,9 +105,9 @@ def install_and_load_dependencies():
     os.makedirs(dependencies_dir, exist_ok=True)
 
     if (sys.platform == "win32" or sys.platform == "linux") and check_cuda():
-        requirements_file = "./requirements/cuda.txt"
+        requirements_file = absolute_path("./requirements/cuda.txt")
     else:
-        requirements_file = "./requirements/cpu.txt"
+        requirements_file = absolute_path("./requirements/cpu.txt")
     
     subprocess.run(
         [
