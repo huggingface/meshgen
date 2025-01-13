@@ -106,6 +106,8 @@ def install_and_load_dependencies():
 
     if (sys.platform == "win32" or sys.platform == "linux") and check_cuda():
         requirements_file = absolute_path("./requirements/cuda.txt")
+    elif sys.platform == "darwin":
+        requirements_file = absolute_path("./requirements/metal.txt")
     else:
         requirements_file = absolute_path("./requirements/cpu.txt")
     
