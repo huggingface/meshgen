@@ -8,17 +8,39 @@ maintainer = "Hugging Face"
 type = "add-on"
 
 website = "https://github.com/huggingface/meshgen"
-tags = ["mesh", "ai", "generative", "3d"]
+tags = ["Mesh", "Modeling", "Node", "Object", "Add Mesh", "System", "Pipeline", "User Interface"]
 
 blender_version_min = "4.2.0"
 
 license = [
     "MIT",
 ]
+
 copyright = [
-    "2024- Hugging Face",
+    "2024 Hugging Face",
+]
+
+wheels = [
+    "./wheels/certifi-2025.1.31-py3-none-any.whl",
+    "./wheels/charset_normalizer-3.4.1-cp311-cp311-win_amd64.whl",
+    "./wheels/colorama-0.4.6-py2.py3-none-any.whl",
+    "./wheels/diskcache-5.6.3-py3-none-any.whl",
+    "./wheels/filelock-3.17.0-py3-none-any.whl",
+    "./wheels/fsspec-2025.2.0-py3-none-any.whl",
+    "./wheels/huggingface_hub-0.29.2-py3-none-any.whl",
+    "./wheels/idna-3.10-py3-none-any.whl",
+    "./wheels/jinja2-3.1.6-py3-none-any.whl",
+    "./wheels/llama_cpp_python-0.2.90-cp311-cp311-win_amd64.whl",
+    "./wheels/MarkupSafe-3.0.2-cp311-cp311-win_amd64.whl",
+    "./wheels/numpy-2.2.3-cp311-cp311-win_amd64.whl",
+    "./wheels/packaging-24.2-py3-none-any.whl",
+    "./wheels/PyYAML-6.0.2-cp311-cp311-win_amd64.whl",
+    "./wheels/requests-2.32.3-py3-none-any.whl",
+    "./wheels/tqdm-4.67.1-py3-none-any.whl",
+    "./wheels/typing_extensions-4.12.2-py3-none-any.whl",
+    "./wheels/urllib3-2.3.0-py3-none-any.whl"
 ]
 
 [permissions]
-network = "Download required models and dependencies"
-files = "Install required models and dependencies"
+network = "Download required models"
+files = "Install required models"

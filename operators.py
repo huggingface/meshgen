@@ -1,15 +1,53 @@
-import bmesh
-import bpy
+import os
 import queue
 import sys
 import threading
 import traceback
 
-from ..generator import Generator
+import bmesh  # type: ignore
+import bpy
+
+from .generator import Generator
+from .utils import absolute_path, open_console
+
+
+class MESHGEN_OT_DownloadRequiredModels(bpy.types.Operator):
+    bl_idname = "meshgen.download"
+    bl_label = "Download Required Models"
+    bl_options = {"REGISTER", "INTERNAL"}
+
+    def execute(self, context):
+        if sys.platform == "win32":
+            open_console()
+
+        from huggingface_hub import hf_hub_download
+
+        generator = Generator.instance()
+        models_to_download = [
+            model
+            for model in generator.required_models
+            if model not in generator.downloaded_models
+        ]
+
+        if not models_to_download:
+            print("All required models are already downloaded.")
+            return
+
+        models_dir = absolute_path("models")
+        if not os.path.exists(models_dir):
+            os.makedirs(models_dir)
+
+        for model in models_to_download:
+            print(f"Downloading model: {model['repo_id']}:{model['filename']}")
+            hf_hub_download(
+                model["repo_id"], filename=model["filename"], local_dir=models_dir
+            )
+            generator._list_downloaded_models()
+        return {"FINISHED"}
 
 
 class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
-    bl_idname = "meshgen.generate_mesh"
+    bl_idname = "meshgen.generate"
     bl_label = "Generate Mesh"
     bl_options = {"REGISTER", "INTERNAL"}
 
@@ -27,19 +65,19 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
 
         generator = Generator.instance()
         messages = [
-            {"role": "system", "content": "You are a helpful assistant that can generate 3D obj files."},
-            {"role": "user", "content": props.prompt}
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that can generate 3D obj files.",
+            },
+            {"role": "user", "content": props.prompt},
         ]
         self.generated_text = ""
         self.line_buffer = ""
 
         if not context.scene.meshgen_props.use_ollama_backend:
             self._iterator = generator.llm.create_chat_completion(
-                messages=messages,
-                stream=True,
-                temperature=props.temperature
+                messages=messages, stream=True, temperature=props.temperature
             )
-        
 
         props.is_running = True
         self._queue = queue.Queue()
@@ -47,24 +85,22 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         def run_in_thread():
             try:
                 if props.use_ollama_backend:
-                    template="""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+                    template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
                     {{ .System }}<|eot_id|><|start_header_id|>user<|end_header_id|>
                     {{ .Prompt }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
                     """
                     options = {"temperature": props.temperature}
                     stream = generator.llm.generate(
-                        model='hf.co/bartowski/LLaMA-Mesh-GGUF:Q4_K_M',
+                        model="hf.co/bartowski/LLaMA-Mesh-GGUF:Q4_K_M",
                         prompt=props.prompt,
                         stream=True,
                         template=template,
                         system="You are a helpful assistant that can generate 3D obj files.",
-                        options=options
+                        options=options,
                     )
                 else:
                     stream = generator.llm.create_chat_completion(
-                        messages=messages,
-                        stream=True,
-                        temperature=props.temperature
+                        messages=messages, stream=True, temperature=props.temperature
                     )
 
                 for chunk in stream:
@@ -88,10 +124,10 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         for area in context.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
-    
+
     def modal(self, context, event):
         props = context.scene.meshgen_props
-        
+
         if event.type == "TIMER":
             new_tokens = False
             try:
@@ -126,7 +162,7 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
 
             if new_tokens:
                 self.redraw(context)
-        
+
             if not self._thread.is_alive() and self._queue.empty():
                 if self.line_buffer:
                     self.process_line(self.line_buffer.strip(), context)
@@ -136,14 +172,14 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
                 self.bmesh.free()
                 self.redraw(context)
                 return {"FINISHED"}
-    
+
         if props.cancelled:
             props.is_running = False
             context.window_manager.event_timer_remove(self._timer)
             self.bmesh.free()
             self.redraw(context)
             return {"CANCELLED"}
-        
+
         return {"PASS_THROUGH"}
 
     def process_line(self, line, context):
@@ -175,7 +211,13 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
 
     def add_face(self, a, b, c, context):
         try:
-            self.bmesh.faces.new((self.bmesh.verts[a - 1], self.bmesh.verts[b - 1], self.bmesh.verts[c - 1]))
+            self.bmesh.faces.new(
+                (
+                    self.bmesh.verts[a - 1],
+                    self.bmesh.verts[b - 1],
+                    self.bmesh.verts[c - 1],
+                )
+            )
             self.bmesh.faces.ensure_lookup_table()
             context.scene.meshgen_props.faces_generated += 1
             self.update_mesh(context)
@@ -190,7 +232,7 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
 
 
 class MESHGEN_OT_CancelGeneration(bpy.types.Operator):
-    bl_idname = "meshgen.cancel_generation"
+    bl_idname = "meshgen.cancel"
     bl_label = "Cancel Generation"
     bl_options = {"REGISTER", "INTERNAL"}
 
@@ -198,3 +240,35 @@ class MESHGEN_OT_CancelGeneration(bpy.types.Operator):
         props = context.scene.meshgen_props
         props.cancelled = True
         return {"FINISHED"}
+
+
+class MESHGEN_OT_LoadGenerator(bpy.types.Operator):
+    bl_idname = "meshgen.load"
+    bl_label = "Load Generator"
+    bl_options = {"REGISTER", "INTERNAL"}
+
+    def execute(self, context):
+        if sys.platform == "win32":
+            open_console()
+
+        Generator.instance().load_generator()
+
+        for area in bpy.context.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
+
+        return {"FINISHED"}
+
+
+def register():
+    bpy.utils.register_class(MESHGEN_OT_DownloadRequiredModels)
+    bpy.utils.register_class(MESHGEN_OT_GenerateMesh)
+    bpy.utils.register_class(MESHGEN_OT_CancelGeneration)
+    bpy.utils.register_class(MESHGEN_OT_LoadGenerator)
+
+
+def unregister():
+    bpy.utils.unregister_class(MESHGEN_OT_DownloadRequiredModels)
+    bpy.utils.unregister_class(MESHGEN_OT_GenerateMesh)
+    bpy.utils.unregister_class(MESHGEN_OT_CancelGeneration)
+    bpy.utils.unregister_class(MESHGEN_OT_LoadGenerator)

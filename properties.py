@@ -54,5 +54,14 @@ class MeshGenProperties(bpy.types.PropertyGroup):
             name="Ollama Host",
             description="Host address for Ollama backend",
             default="http://localhost:11434",
-        )
+        ),
     }
+
+
+def register():
+    bpy.utils.register_class(MeshGenProperties)
+    bpy.types.Scene.meshgen_props = bpy.props.PointerProperty(type=MeshGenProperties)
+
+
+def unregister():
+    bpy.utils.unregister_class(MeshGenProperties)
