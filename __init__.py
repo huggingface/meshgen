@@ -1,33 +1,39 @@
+if "bpy" in locals():
+    import imp
+
+    imp.reload(generator)
+    imp.reload(operators)
+    imp.reload(ui)
+    imp.reload(preferences)
+    imp.reload(properties)
+    imp.reload(utils)
+else:
+    from . import operators
+    from . import ui
+    from . import preferences
+    from . import properties
+
+
 import bpy
-
-from .operators import *
-from .panels import *
-from .preferences import *
-from .property_groups import *
-
-classes = (
-    MeshGenPreferences,
-    MeshGenProperties,
-    MESHGEN_OT_InstallDependencies,
-    MESHGEN_OT_UninstallDependencies,
-    MESHGEN_OT_DownloadRequiredModels,
-    MESHGEN_OT_LoadGenerator,
-    MESHGEN_OT_GenerateMesh,
-    MESHGEN_OT_CancelGeneration,
-    MESHGEN_PT_Panel,
-    MESHGEN_PT_Settings,
-    MESHGEN_PT_Warning,
-    MESHGEN_PT_Setup,
-)
 
 
 def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.Scene.meshgen_props = bpy.props.PointerProperty(type=MeshGenProperties)
+    operators.register()
+    ui.register()
+    preferences.register()
+    properties.register()
+
+    print(f"{__package__} is registered")
 
 
 def unregister():
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
-    del bpy.types.Scene.meshgen_props
+    operators.unregister()
+    ui.unregister()
+    preferences.unregister()
+    properties.unregister()
+
+    print(f"{__package__} is unregistered")
+
+
+if __name__ == "__main__":
+    register()
