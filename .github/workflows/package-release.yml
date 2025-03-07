@@ -18,7 +18,7 @@ jobs:
                     - filename: cuda-win64
                       os: windows-latest
                       requirements: cuda.txt
-                      args: "--only-binary=llama_cpp_python"
+                      args: "--only-binary llama_cpp_python"
 
                     - filename: cpu-macos-arm
                       os: macos-latest
@@ -38,7 +38,7 @@ jobs:
                     - filename: cuda-linux
                       os: ubuntu-latest
                       requirements: cuda.txt
-                      args: "--only-binary=llama_cpp_python"
+                      args: "--only-binary llama_cpp_python"
         runs-on: ${{ matrix.platform.os }}
         steps:
             - name: Checkout repository
@@ -53,19 +53,33 @@ jobs:
 
             - name: Upgrade pip
               shell: bash
-              run: "python -m pip install --upgrade setuptools pip"
+              run: "python -m pip install --upgrade setuptools pip tomli tomli-w"
 
-            - name: Install dependencies
+            - name: Download wheels
               shell: bash
-              run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} ${{ matrix.platform.args }} --no-cache-dir --target .python_dependencies"
+              run: |
+                  python -m pip wheel -r requirements/${{ matrix.platform.requirements }} \
+                  ${{ matrix.platform.args }} \
+                  --wheel-dir wheels
               working-directory: meshgen
 
-            - name: Archive release
-              uses: thedoctor0/zip-release@main
-              with:
-                  type: zip
-                  filename: meshgen-${{ matrix.platform.filename }}.zip
-                  exclusions: "*.git*"
+            - name: Update manifest
+              shell: bash
+              run: |
+                  python -c "
+                  import tomli, tomli_w, os
+                  with open('blender_manifest.toml', 'rb') as f:
+                      manifest = tomli.load(f)
+                  manifest['wheels'] = [f'\"wheels/{wheel}\"' for wheel in os.listdir('wheels')]
+                  with open('blender_manifest.toml', 'wb') as f:
+                      tomli_w.dump(manifest, f)
+                  "
+              working-directory: meshgen
+
+            - name: Build extension
+              shell: bash
+              run: blender --command extension build
+              working-directory: meshgen
 
             - name: Archive and upload artifact
               uses: actions/upload-artifact@v4
