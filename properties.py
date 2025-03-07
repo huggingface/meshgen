@@ -45,16 +45,6 @@ class MeshGenProperties(bpy.types.PropertyGroup):
             description="Whether to show developer options.",
             default=False,
         ),
-        "use_ollama_backend": bpy.props.BoolProperty(
-            name="Use Ollama for Backend",
-            description="Use Ollama for backend processing",
-            default=False,
-        ),
-        "ollama_host": bpy.props.StringProperty(
-            name="Ollama Host",
-            description="Host address for Ollama backend",
-            default="http://localhost:11434",
-        ),
     }
 
 

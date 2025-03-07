@@ -22,30 +22,6 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
         else:
             layout.label(text="Ready to generate. Press 'N' -> MeshGen to get started.")
 
-        layout.separator()
-
-        layout.prop(
-            context.scene.meshgen_props,
-            "show_developer_options",
-            text="Show Developer Options",
-        )
-
-        if context.scene.meshgen_props.show_developer_options:
-            box = layout.box()
-
-            if bpy.app.online_access:
-                box.prop(
-                    context.scene.meshgen_props,
-                    "use_ollama_backend",
-                    text="Use Ollama Backend",
-                )
-
-                if context.scene.meshgen_props.use_ollama_backend:
-                    ollama_options_box = box.box()
-                    ollama_options_box.prop(
-                        context.scene.meshgen_props, "ollama_host", text="Ollama Host"
-                    )
-
 
 def register():
     bpy.utils.register_class(MeshGenPreferences)

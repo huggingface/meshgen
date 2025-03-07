@@ -74,34 +74,18 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
         self.generated_text = ""
         self.line_buffer = ""
 
-        if not context.scene.meshgen_props.use_ollama_backend:
-            self._iterator = generator.llm.create_chat_completion(
-                messages=messages, stream=True, temperature=props.temperature
-            )
+        self._iterator = generator.llm.create_chat_completion(
+            messages=messages, stream=True, temperature=props.temperature
+        )
 
         props.is_running = True
         self._queue = queue.Queue()
 
         def run_in_thread():
             try:
-                if props.use_ollama_backend:
-                    template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-                    {{ .System }}<|eot_id|><|start_header_id|>user<|end_header_id|>
-                    {{ .Prompt }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    """
-                    options = {"temperature": props.temperature}
-                    stream = generator.llm.generate(
-                        model="hf.co/bartowski/LLaMA-Mesh-GGUF:Q4_K_M",
-                        prompt=props.prompt,
-                        stream=True,
-                        template=template,
-                        system="You are a helpful assistant that can generate 3D obj files.",
-                        options=options,
-                    )
-                else:
-                    stream = generator.llm.create_chat_completion(
-                        messages=messages, stream=True, temperature=props.temperature
-                    )
+                stream = generator.llm.create_chat_completion(
+                    messages=messages, stream=True, temperature=props.temperature
+                )
 
                 for chunk in stream:
                     if props.cancelled:
@@ -135,13 +119,10 @@ class MESHGEN_OT_GenerateMesh(bpy.types.Operator):
                     chunk = self._queue.get_nowait()
                     if chunk is None:
                         break
-                    if props.use_ollama_backend:
-                        content = chunk["response"]
-                    else:
-                        delta = chunk["choices"][0]["delta"]
-                        if "content" not in delta:
-                            continue
-                        content = delta["content"]
+                    delta = chunk["choices"][0]["delta"]
+                    if "content" not in delta:
+                        continue
+                    content = delta["content"]
                     self.generated_text += content
                     self.line_buffer += content
                     props.generated_text = self.generated_text

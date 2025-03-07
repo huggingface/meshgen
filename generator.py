@@ -2,8 +2,6 @@ import os
 import sys
 import traceback
 
-import bpy
-
 from .utils import absolute_path
 
 
@@ -59,22 +57,14 @@ class Generator:
         print("Loading generator...")
 
         try:
-            if bpy.context.scene.meshgen_props.use_ollama_backend:
-                from ollama import Client
+            import llama_cpp
 
-                self.llm = Client(
-                    host=bpy.context.scene.meshgen_props.ollama_host,
-                )
-                self.llm.pull(model="hf.co/bartowski/LLaMA-Mesh-GGUF:Q4_K_M")
-            else:
-                import llama_cpp
-
-                self.llm = llama_cpp.Llama(
-                    model_path=absolute_path("models/LLaMA-Mesh-Q4_K_M.gguf"),
-                    n_gpu_layers=-1,
-                    seed=1337,
-                    n_ctx=4096,
-                )
+            self.llm = llama_cpp.Llama(
+                model_path=absolute_path("models/LLaMA-Mesh-Q4_K_M.gguf"),
+                n_gpu_layers=-1,
+                seed=1337,
+                n_ctx=4096,
+            )
 
             print("Finished loading generator.")
 
