@@ -1,0 +1,24 @@
+schema_version = "1.0.0"
+
+id = "meshgen"
+version = "0.4.0"
+name = "meshgen"
+tagline = "A Blender addon for generating meshes with AI"
+maintainer = "Hugging Face"
+type = "add-on"
+
+website = "https://github.com/huggingface/meshgen"
+tags = ["mesh", "ai", "generative", "3d"]
+
+blender_version_min = "4.2.0"
+
+license = [
+    "MIT",
+]
+copyright = [
+    "2024- Hugging Face",
+]
+
+[permissions]
+network = "Download required models and dependencies"
+files = "Install required models and dependencies"
