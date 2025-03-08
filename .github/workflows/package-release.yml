@@ -6,7 +6,7 @@ on:
     workflow_dispatch:
 
 jobs:
-    package-release:
+    build-and-package:
         strategy:
             matrix:
                 platform:
@@ -14,31 +14,38 @@ jobs:
                       os: windows-latest
                       requirements: cpu.txt
                       args: ""
+                      blender_url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-windows-x64.zip"
 
                     - filename: cuda-win64
                       os: windows-latest
                       requirements: cuda.txt
-                      args: "--only-binary=llama_cpp_python"
+                      args: "--only-binary llama_cpp_python"
+                      blender_url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-windows-x64.zip"
 
                     - filename: cpu-macos-arm
                       os: macos-latest
                       requirements: cpu.txt
                       args: ""
+                      blender_install: "brew install --cask blender@lts"
 
                     - filename: cpu-macos-x86
                       os: macos-13
                       requirements: cpu.txt
                       args: ""
+                      blender_install: "brew install --cask blender@lts"
 
                     - filename: cpu-linux
                       os: ubuntu-latest
                       requirements: cpu.txt
                       args: ""
+                      blender_url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz"
 
                     - filename: cuda-linux
                       os: ubuntu-latest
                       requirements: cuda.txt
-                      args: "--only-binary=llama_cpp_python"
+                      args: "--only-binary llama_cpp_python"
+                      blender_url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz"
+
         runs-on: ${{ matrix.platform.os }}
         steps:
             - name: Checkout repository
@@ -51,21 +58,77 @@ jobs:
               with:
                   python-version: "3.11"
 
-            - name: Upgrade pip
+            - name: Upgrade pip and install dependencies
               shell: bash
-              run: "python -m pip install --upgrade setuptools pip"
+              run: "python -m pip install --upgrade setuptools pip tomli tomli-w"
 
-            - name: Install dependencies
+            - name: Install Blender (Windows)
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $url = "${{ matrix.platform.blender_url }}"
+                  $output = "blender.zip"
+                  Invoke-WebRequest -Uri $url -OutFile $output
+                  Expand-Archive -Path $output -DestinationPath .
+                  $blender_dir = "$PWD/blender-4.2.0-windows-x64"
+                  echo "$blender_dir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+                  echo "Blender installed to $blender_dir"
+
+            - name: Install Blender (macOS)
+              if: runner.os == 'macOS'
               shell: bash
-              run: "python -m pip install -r requirements/${{ matrix.platform.requirements }} ${{ matrix.platform.args }} --no-cache-dir --target .python_dependencies"
+              run: |
+                  ${{ matrix.platform.blender_install }}
+                  if [ "$(uname -m)" == "arm64" ]; then
+                    echo "/opt/homebrew/bin" >> $GITHUB_PATH
+                  else
+                    echo "/usr/local/bin" >> $GITHUB_PATH
+                  fi
+                  echo "Blender installed via ${{ matrix.platform.blender_install }}"
+
+            - name: Install Blender (Linux)
+              if: runner.os == 'Linux'
+              shell: bash
+              run: |
+                  url="${{ matrix.platform.blender_url }}"
+                  output="blender.tar.xz"
+                  curl -o $output $url
+                  tar -xf $output
+                  blender_dir="$(pwd)/blender-4.2.0-linux-x64"
+                  echo "$blender_dir" >> $GITHUB_PATH
+                  echo "Blender installed at: $blender_dir"
+
+            - name: Download wheels
+              shell: bash
+              run: |
+                  python -m pip wheel -r requirements/${{ matrix.platform.requirements }} \
+                  ${{ matrix.platform.args }} \
+                  --wheel-dir wheels
               working-directory: meshgen
 
-            - name: Archive release
-              uses: thedoctor0/zip-release@main
-              with:
-                  type: zip
-                  filename: meshgen-${{ matrix.platform.filename }}.zip
-                  exclusions: "*.git*"
+            - name: Update manifest
+              shell: bash
+              run: |
+                  python -c "
+                  import tomli, tomli_w, os
+                  with open('blender_manifest.toml', 'rb') as f:
+                      manifest = tomli.load(f)
+                  manifest['wheels'] = [f\"wheels/{wheel}\" for wheel in os.listdir('wheels')]
+                  with open('blender_manifest.toml', 'wb') as f:
+                      tomli_w.dump(manifest, f)
+                  "
+              working-directory: meshgen
+
+            - name: Build extension
+              shell: bash
+              run: blender --command extension build
+              working-directory: meshgen
+
+            - name: Move and rename artifact
+              shell: bash
+              run: |
+                  mv meshgen/meshgen-*.zip meshgen-${{ matrix.platform.filename }}.zip
+                  echo "Artifact created: meshgen-${{ matrix.platform.filename }}.zip"
 
             - name: Archive and upload artifact
               uses: actions/upload-artifact@v4

@@ -2,4 +2,3 @@
 llama_cpp_python==0.2.90
 
 huggingface_hub
-ollama

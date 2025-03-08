@@ -1,1 +1,0 @@
-from .meshgen import MeshGenProperties
