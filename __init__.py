@@ -1,24 +1,19 @@
 if "bpy" in locals():
-    import imp
+    import importlib
 
-    imp.reload(generator)
-    imp.reload(operators)
-    imp.reload(ui)
-    imp.reload(preferences)
-    imp.reload(properties)
-    imp.reload(utils)
+    importlib.reload(backend)
+    importlib.reload(generator)
+    importlib.reload(ui)
+    importlib.reload(preferences)
+    importlib.reload(properties)
+    importlib.reload(utils)
 else:
-    from . import operators
-    from . import ui
-    from . import preferences
-    from . import properties
-
-
-import bpy
+    from . import backend, generator, preferences, properties, ui
 
 
 def register():
-    operators.register()
+    backend.register()
+    generator.register()
     ui.register()
     preferences.register()
     properties.register()
@@ -27,7 +22,8 @@ def register():
 
 
 def unregister():
-    operators.unregister()
+    backend.unregister()
+    generator.unregister()
     ui.unregister()
     preferences.unregister()
     properties.unregister()
