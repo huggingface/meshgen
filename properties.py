@@ -25,7 +25,7 @@ class MeshGenProperties(bpy.types.PropertyGroup):
         ),
         "temperature": bpy.props.FloatProperty(
             name="Temperature",
-            description="The temperature for the mesh generation.",
+            description="The temperature for the mesh generation. 0.0 is deterministic, 1.0 is random.",
             default=0.9,
             min=0.0,
             max=1.0,
@@ -39,11 +39,6 @@ class MeshGenProperties(bpy.types.PropertyGroup):
             name="Faces Generated",
             description="The number of faces generated.",
             default=0,
-        ),
-        "show_developer_options": bpy.props.BoolProperty(
-            name="Show Developer Options",
-            description="Whether to show developer options.",
-            default=False,
         ),
     }
 

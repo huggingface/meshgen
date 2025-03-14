@@ -13,7 +13,6 @@ Go to the [Latest Release](https://github.com/huggingface/meshgen/releases/lates
 # Usage
 
 -   Press `N` -> `MeshGen` (or `View` -> `Sidebar` -> Select the `MeshGen` tab)
--   Click `Load Generator` (this will take a while)
 -   Enter a prompt, for example: `Create a 3D obj file using the following description: a desk`
 -   Click `Generate Mesh`
 

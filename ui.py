@@ -1,11 +1,6 @@
 import bpy
 
 from .generator import Generator
-from .operators import (
-    MESHGEN_OT_CancelGeneration,
-    MESHGEN_OT_GenerateMesh,
-    MESHGEN_OT_LoadGenerator,
-)
 
 
 class MESHGEN_PT_Panel(bpy.types.Panel):
@@ -14,79 +9,56 @@ class MESHGEN_PT_Panel(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "MeshGen"
 
-    @classmethod
-    def poll(cls, context):
-        generator = Generator.instance()
-        return generator.is_generator_loaded()
-
     def draw(self, context):
         layout = self.layout
         props = context.scene.meshgen_props
+        generator = Generator.instance()
 
-        layout.prop(props, "prompt")
-        layout.separator()
-        if props.is_running:
-            layout.operator(
-                MESHGEN_OT_CancelGeneration.bl_idname, text="Cancel Generation"
-            )
+        if generator.is_backend_valid():
+            if props.vertices_generated > 0 or props.faces_generated > 0:
+                results_box = layout.box()
+                results_col = results_box.column(align=True)
+                results_col.label(text="Results", icon="INFO")
+
+                if props.vertices_generated > 0:
+                    results_col.label(text=f"Vertices: {props.vertices_generated}")
+                if props.faces_generated > 0:
+                    results_col.label(text=f"Faces: {props.faces_generated}")
+
+                if not props.is_running:
+                    if props.cancelled:
+                        results_col.label(text="Cancelled", icon="X")
+                    else:
+                        results_col.label(text="Complete", icon="CHECKMARK")
+
+                layout.separator()
+
+            if props.is_running:
+                layout.label(text="Generation in progress...", icon="SORTTIME")
+                layout.operator("meshgen.cancel", text="Cancel", icon="X")
+            else:
+                settings_box = layout.box()
+                settings_box.label(text="Settings", icon="SETTINGS")
+                settings_box.prop(props, "prompt")
+                settings_box.prop(props, "temperature", slider=True)
+
+                layout.separator()
+
+                generate_row = layout.row()
+                generate_row.scale_y = 1.2
+                generate_row.operator("meshgen.generate", text="Generate", icon="PLAY")
         else:
-            layout.operator(MESHGEN_OT_GenerateMesh.bl_idname, text="Generate Mesh")
+            error_box = layout.box()
 
-        if props.vertices_generated > 0 or props.faces_generated > 0:
-            layout.separator()
-            if props.vertices_generated > 0:
-                layout.label(text=f"Generated {props.vertices_generated} vertices")
-            if props.faces_generated > 0:
-                layout.label(text=f"Generated {props.faces_generated} faces")
-            if not props.is_running:
-                if props.cancelled:
-                    layout.label(text="Generation cancelled")
-                else:
-                    layout.label(text="Generation complete")
-
-
-class MESHGEN_PT_Settings(bpy.types.Panel):
-    bl_label = "Options"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "MeshGen"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    @classmethod
-    def poll(cls, context):
-        generator = Generator.instance()
-        return generator.is_generator_loaded()
-
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.meshgen_props
-
-        layout.prop(props, "temperature")
-
-
-class MESHGEN_PT_Setup(bpy.types.Panel):
-    bl_label = "Setup"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "MeshGen"
-
-    @classmethod
-    def poll(cls, context):
-        generator = Generator.instance()
-        return not generator.is_generator_loaded()
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator(MESHGEN_OT_LoadGenerator.bl_idname, text="Load Generator")
+            error_box.label(text="Invalid configuration", icon="ERROR")
+            error_box.operator(
+                "preferences.addon_show", text="Open Preferences"
+            ).module = __package__
 
 
 def register():
     bpy.utils.register_class(MESHGEN_PT_Panel)
-    bpy.utils.register_class(MESHGEN_PT_Settings)
-    bpy.utils.register_class(MESHGEN_PT_Setup)
 
 
 def unregister():
     bpy.utils.unregister_class(MESHGEN_PT_Panel)
-    bpy.utils.unregister_class(MESHGEN_PT_Settings)
-    bpy.utils.unregister_class(MESHGEN_PT_Setup)

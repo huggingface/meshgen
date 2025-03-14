@@ -1,44 +1,80 @@
 schema_version = "1.0.0"
-
 id = "meshgen"
-version = "0.5.0"
+version = "0.6.0"
 name = "meshgen"
 tagline = "A Blender addon for generating meshes with AI"
 maintainer = "Hugging Face"
 type = "add-on"
-
 website = "https://github.com/huggingface/meshgen"
-tags = ["Mesh", "Modeling", "Node", "Object", "Add Mesh", "System", "Pipeline", "User Interface"]
-
+tags = [
+    "Mesh",
+    "Modeling",
+    "Node",
+    "Object",
+    "Add Mesh",
+    "System",
+    "Pipeline",
+    "User Interface",
+]
 blender_version_min = "4.2.0"
-
 license = [
     "MIT",
 ]
-
 copyright = [
     "2024 Hugging Face",
 ]
-
 wheels = [
-    "./wheels/certifi-2025.1.31-py3-none-any.whl",
-    "./wheels/charset_normalizer-3.4.1-cp311-cp311-win_amd64.whl",
-    "./wheels/colorama-0.4.6-py2.py3-none-any.whl",
-    "./wheels/diskcache-5.6.3-py3-none-any.whl",
-    "./wheels/filelock-3.17.0-py3-none-any.whl",
-    "./wheels/fsspec-2025.2.0-py3-none-any.whl",
-    "./wheels/huggingface_hub-0.29.2-py3-none-any.whl",
-    "./wheels/idna-3.10-py3-none-any.whl",
-    "./wheels/jinja2-3.1.6-py3-none-any.whl",
-    "./wheels/llama_cpp_python-0.2.90-cp311-cp311-win_amd64.whl",
-    "./wheels/MarkupSafe-3.0.2-cp311-cp311-win_amd64.whl",
-    "./wheels/numpy-2.2.3-cp311-cp311-win_amd64.whl",
-    "./wheels/packaging-24.2-py3-none-any.whl",
-    "./wheels/PyYAML-6.0.2-cp311-cp311-win_amd64.whl",
-    "./wheels/requests-2.32.3-py3-none-any.whl",
-    "./wheels/tqdm-4.67.1-py3-none-any.whl",
-    "./wheels/typing_extensions-4.12.2-py3-none-any.whl",
-    "./wheels/urllib3-2.3.0-py3-none-any.whl"
+    "wheels/aiohappyeyeballs-2.6.1-py3-none-any.whl",
+    "wheels/aiohttp-3.11.13-cp311-cp311-win_amd64.whl",
+    "wheels/aiosignal-1.3.2-py2.py3-none-any.whl",
+    "wheels/annotated_types-0.7.0-py3-none-any.whl",
+    "wheels/anyio-4.8.0-py3-none-any.whl",
+    "wheels/attrs-25.3.0-py3-none-any.whl",
+    "wheels/certifi-2025.1.31-py3-none-any.whl",
+    "wheels/charset_normalizer-3.4.1-cp311-cp311-win_amd64.whl",
+    "wheels/click-8.1.8-py3-none-any.whl",
+    "wheels/colorama-0.4.6-py2.py3-none-any.whl",
+    "wheels/diskcache-5.6.3-py3-none-any.whl",
+    "wheels/distro-1.9.0-py3-none-any.whl",
+    "wheels/filelock-3.17.0-py3-none-any.whl",
+    "wheels/filelock-3.18.0-py3-none-any.whl",
+    "wheels/frozenlist-1.5.0-cp311-cp311-win_amd64.whl",
+    "wheels/fsspec-2025.3.0-py3-none-any.whl",
+    "wheels/h11-0.14.0-py3-none-any.whl",
+    "wheels/httpcore-1.0.7-py3-none-any.whl",
+    "wheels/httpx-0.28.1-py3-none-any.whl",
+    "wheels/huggingface_hub-0.29.2-py3-none-any.whl",
+    "wheels/huggingface_hub-0.29.3-py3-none-any.whl",
+    "wheels/idna-3.10-py3-none-any.whl",
+    "wheels/importlib_metadata-8.6.1-py3-none-any.whl",
+    "wheels/jinja2-3.1.6-py3-none-any.whl",
+    "wheels/jiter-0.9.0-cp311-cp311-win_amd64.whl",
+    "wheels/jsonschema-4.23.0-py3-none-any.whl",
+    "wheels/jsonschema_specifications-2024.10.1-py3-none-any.whl",
+    "wheels/litellm-1.63.8-py3-none-any.whl",
+    "wheels/llama_cpp_python-0.2.90-cp311-cp311-win_amd64.whl",
+    "wheels/MarkupSafe-3.0.2-cp311-cp311-win_amd64.whl",
+    "wheels/multidict-6.1.0-cp311-cp311-win_amd64.whl",
+    "wheels/numpy-2.2.3-cp311-cp311-win_amd64.whl",
+    "wheels/openai-1.66.3-py3-none-any.whl",
+    "wheels/packaging-24.2-py3-none-any.whl",
+    "wheels/propcache-0.3.0-cp311-cp311-win_amd64.whl",
+    "wheels/pydantic-2.10.6-py3-none-any.whl",
+    "wheels/pydantic_core-2.27.2-cp311-cp311-win_amd64.whl",
+    "wheels/python_dotenv-1.0.1-py3-none-any.whl",
+    "wheels/PyYAML-6.0.2-cp311-cp311-win_amd64.whl",
+    "wheels/referencing-0.36.2-py3-none-any.whl",
+    "wheels/regex-2024.11.6-cp311-cp311-win_amd64.whl",
+    "wheels/requests-2.32.3-py3-none-any.whl",
+    "wheels/rpds_py-0.23.1-cp311-cp311-win_amd64.whl",
+    "wheels/sniffio-1.3.1-py3-none-any.whl",
+    "wheels/tiktoken-0.9.0-cp311-cp311-win_amd64.whl",
+    "wheels/tokenizers-0.21.1-cp39-abi3-win_amd64.whl",
+    "wheels/tqdm-4.67.1-py3-none-any.whl",
+    "wheels/typing_extensions-4.12.2-py3-none-any.whl",
+    "wheels/urllib3-2.3.0-py3-none-any.whl",
+    "wheels/yarl-1.18.3-cp311-cp311-win_amd64.whl",
+    "wheels/zipp-3.21.0-py3-none-any.whl",
 ]
 
 [permissions]
