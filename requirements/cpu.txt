@@ -1,5 +1,5 @@
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-llama_cpp_python==0.2.90
+llama_cpp_python==0.3.2
 
-huggingface_hub
-litellm==1.63.8
+mathutils
+smolagents[litellm]

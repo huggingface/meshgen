@@ -13,7 +13,7 @@ jobs:
                     - filename: cpu-win64
                       os: windows-latest
                       requirements: cpu.txt
-                      args: ""
+                      args: "--only-binary llama_cpp_python"
                       blender_url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-windows-x64.zip"
 
                     - filename: cuda-win64
