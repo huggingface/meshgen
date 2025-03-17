@@ -1,19 +1,38 @@
-if "bpy" in locals():
-    import importlib
+import importlib
 
+from . import backend, operators, preferences, properties, tools, ui, utils
+
+if "bpy" in locals():
     importlib.reload(backend)
-    importlib.reload(generator)
-    importlib.reload(ui)
+    importlib.reload(operators)
     importlib.reload(preferences)
     importlib.reload(properties)
+    importlib.reload(tools)
+    importlib.reload(ui)
     importlib.reload(utils)
-else:
-    from . import backend, generator, preferences, properties, ui
+
+
+def reset_backend():
+    try:
+        backend.Backend.reset()
+    except Exception:
+        pass
+
+
+def reset_runtime_preferences():
+    try:
+        import bpy
+
+        if __package__ in bpy.context.preferences.addons:
+            prefs = bpy.context.preferences.addons[__package__].preferences
+            prefs.downloading = False
+            prefs.download_progress = 0
+    except Exception:
+        pass
 
 
 def register():
-    backend.register()
-    generator.register()
+    operators.register()
     ui.register()
     preferences.register()
     properties.register()
@@ -22,8 +41,10 @@ def register():
 
 
 def unregister():
-    backend.unregister()
-    generator.unregister()
+    reset_backend()
+    reset_runtime_preferences()
+
+    operators.unregister()
     ui.unregister()
     preferences.unregister()
     properties.unregister()

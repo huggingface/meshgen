@@ -1,397 +1,227 @@
-import json
-import os
-import sys
-from abc import ABC, abstractmethod
+import queue
+import threading
+import traceback
 
 import bpy
+from smolagents import CodeAgent, HfApiModel, LiteLLMModel, LogLevel
 
-from .utils import absolute_path
+from .tools import ToolManager
+from .utils import get_available_models, get_models_dir
 
 
-class LocalModelManager:
+class Backend:
+    """Singleton class that manages AI model loading and inference."""
+
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
-        if not cls._instance:
-            cls._instance = super(LocalModelManager, cls).__new__(cls)
-            cls._instance.initialized = False
+        with cls._lock:
+            if not cls._instance:
+                cls._instance = super(Backend, cls).__new__(cls)
+                cls._instance.model = None
+                cls._instance.agent = None
         return cls._instance
 
-    def __init__(self):
-        if self.initialized:
-            return
-        manifest_path = absolute_path("models/manifest.json")
-        with open(manifest_path, "r") as f:
-            manifest = json.load(f)
-        self.default_model = manifest["default_model"]
-        self.downloaded_models = []
-        self.initialized = True
-        self.update_downloaded_models()
+    def is_valid(self):
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        if prefs.backend_type == "LOCAL":
+            return prefs.current_model in get_available_models()
+        elif prefs.backend_type == "REMOTE":
+            return (
+                (
+                    prefs.llm_provider == "ollama"
+                    and prefs.ollama_endpoint
+                    and prefs.ollama_model_name
+                )
+                or (
+                    prefs.llm_provider == "huggingface"
+                    and prefs.huggingface_model_id
+                    and prefs.huggingface_api_key
+                )
+                or (
+                    prefs.llm_provider == "anthropic"
+                    and prefs.anthropic_model_id
+                    and prefs.anthropic_api_key
+                )
+                or (
+                    prefs.llm_provider == "openai"
+                    and prefs.openai_model_id
+                    and prefs.openai_api_key
+                )
+            )
 
-    def update_downloaded_models(self):
-        models = []
-        models_dir = absolute_path("models")
-        if os.path.exists(models_dir):
-            for file in os.listdir(models_dir):
-                if file.endswith(".gguf"):
-                    models.append(file)
-        self.downloaded_models = models
+    def is_loaded(self):
+        return self.model is not None and self.agent is not None
 
-    def has_default_model(self):
-        self.update_downloaded_models()
-        return self.default_model["filename"] in self.downloaded_models
+    def _load_local_model(self):
+        from .utils import LlamaCppModel
 
-    def get_model_path(self, filename):
-        return absolute_path(f"models/{filename}")
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        model_path = get_models_dir() / prefs.current_model
+        self.model = LlamaCppModel(
+            model_path=str(model_path),
+            n_gpu_layers=-1,
+            n_ctx=prefs.context_length,
+            max_tokens=prefs.context_length,
+        )
+
+    def _load_hf_api_model(self):
+        print("Loading Hugging Face API model")
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        model_id = prefs.huggingface_model_id
+        token = prefs.huggingface_api_key
+        self.model = HfApiModel(
+            model_id=model_id,
+            token=token,
+            max_tokens=prefs.context_length,
+        )
+
+    def _load_litellm_model(self):
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        kwargs = {}
+        if prefs.llm_provider == "ollama":
+            model_id = f"ollama_chat/{prefs.ollama_model_name}"
+            api_base = prefs.ollama_endpoint
+            api_key = prefs.ollama_api_key or None
+            kwargs["num_ctx"] = prefs.context_length
+        elif prefs.llm_provider == "anthropic":
+            model_id = f"anthropic/{prefs.anthropic_model_id}"
+            api_base = None
+            api_key = prefs.anthropic_api_key
+        elif prefs.llm_provider == "openai":
+            model_id = prefs.openai_model_id
+            api_base = None
+            api_key = prefs.openai_api_key
+        else:
+            raise ValueError(f"Unknown provider: {prefs.llm_provider}")
+
+        self.model = LiteLLMModel(
+            model_id=model_id,
+            api_base=api_base,
+            api_key=api_key,
+            **kwargs,
+        )
+        try:
+            input_messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Hello, world!",
+                        }
+                    ],
+                }
+            ]
+            self.model(input_messages)
+        except Exception as e:
+            self.model = None
+            raise e
+
+    def load(self):
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        if prefs.backend_type == "LOCAL":
+            self._load_local_model()
+        elif prefs.backend_type == "REMOTE":
+            if prefs.llm_provider == "huggingface":
+                self._load_hf_api_model()
+            elif (
+                prefs.llm_provider == "ollama"
+                or prefs.llm_provider == "anthropic"
+                or prefs.llm_provider == "openai"
+            ):
+                self._load_litellm_model()
+            else:
+                raise ValueError(f"Unknown provider: {prefs.llm_provider}")
+        else:
+            raise ValueError("Invalid backend type")
+
+        self.agent = CodeAgent(
+            model=self.model,
+            tools=ToolManager.instance().tools,
+            additional_authorized_imports=[
+                "array",
+                "copy",
+                "dataclasses",
+                "decimal",
+                "enum",
+                "functools",
+                "json",
+                "pathlib",
+                "typing",
+            ],
+            add_base_tools=True,
+            verbosity_level=LogLevel.DEBUG,
+        )
+
+    def start_chat_completion(self, messages, temperature, stop_event):
+        prompt = next((msg["content"] for msg in messages if msg["role"] == "user"), "")
+        self.model.temperature = temperature
+        output_queue = queue.Queue()
+
+        def run_agent():
+            try:
+                for step in self.agent.run(prompt, stream=True):
+                    if stop_event.is_set():
+                        output_queue.put(("CANCELED", None))
+                        break
+                    self._step_callback(step, output_queue)
+            except Exception as e:
+                output_queue.put(("ERROR", (str(e), traceback.format_exc())))
+            finally:
+                if not stop_event.is_set():
+                    output_queue.put(("DONE", None))
+
+        thread = threading.Thread(target=run_agent, daemon=True)
+        thread.start()
+        return output_queue
+
+    def _step_callback(self, step, output_queue):
+        if hasattr(step, "error") and step.error:
+            output_queue.put(("STEP_ERROR", step.error.message))
+        elif hasattr(step, "model_output"):
+            thought = step.model_output.strip() if step.model_output else "None"
+            action = (
+                str([tc.dict() for tc in step.tool_calls])
+                if step.tool_calls
+                else "None"
+            )
+            observation = step.observations if step.observations else "None"
+            full_output = (
+                f"Step {step.step_number}\n\n"
+                f"{thought}\n"
+                f"\n"
+                f"Action:\n"
+                f"{action}\n"
+                f"\n"
+                f"Observation:\n"
+                f"{observation}\n"
+            )
+            output_queue.put(("STEP", (str(thought), str(full_output))))
+            if step.tool_calls and "final_answer" in step.tool_calls[0].arguments:
+                output_queue.put(("FINAL_ANSWER", str(step.action_output)))
 
     @classmethod
     def instance(cls):
         return cls()
 
-
-class LLMBackend(ABC):
-    @abstractmethod
-    def is_valid(self):
-        pass
-
-    @abstractmethod
-    def is_loaded(self):
-        pass
-
-    @abstractmethod
-    def load(self):
-        pass
-
-    @abstractmethod
-    def create_chat_completion(self, messages, stream=True, temperature=0.9):
-        pass
-
-    def parse_chunk(self, chunk):
-        if hasattr(chunk, "choices") and len(chunk.choices) > 0:
-            delta = chunk.choices[0].delta
-            if hasattr(delta, "content"):
-                return delta.content
-        elif (
-            isinstance(chunk, dict) and "choices" in chunk and len(chunk["choices"]) > 0
-        ):
-            delta = chunk["choices"][0].get("delta", {})
-            content = delta.get("content")
-            return content
-        return None
-
-
-class LocalLLM(LLMBackend):
-    def __init__(self):
-        self.llm = None
-
-    def is_valid(self):
-        prefs = bpy.context.preferences.addons[__package__].preferences
-        if prefs.current_model is None:
-            return False
-        model_manager = LocalModelManager.instance()
-        model_path = model_manager.get_model_path(prefs.current_model)
-        return model_path is not None and os.path.exists(model_path)
-
-    def is_loaded(self):
-        return self.llm is not None
-
-    def load(self):
-        prefs = bpy.context.preferences.addons[__package__].preferences
-        model_manager = LocalModelManager.instance()
-        model_path = model_manager.get_model_path(prefs.current_model)
-        print(f"Loading local model: {model_path}")
-        try:
-            import llama_cpp
-
-            self.llm = llama_cpp.Llama(
-                model_path=model_path,
-                n_gpu_layers=-1,
-                seed=1337,
-                n_ctx=4096,
-            )
-            print("Finished loading local model.")
-        except Exception as e:
-            print(f"Failed to load local model: {e}", file=sys.stderr)
-            raise
-
-    def create_chat_completion(self, messages, stream=True, temperature=0.9):
-        if self.llm is None:
-            raise RuntimeError("Model not loaded")
-        return self.llm.create_chat_completion(
-            messages, stream=stream, temperature=temperature
-        )
-
-
-class LiteLLMBackend(LLMBackend):
-    def __init__(self):
-        self.client = None
-
-    def is_valid(self):
-        prefs = bpy.context.preferences.addons[__package__].preferences
-        return (
-            prefs.backend_type == "REMOTE"
-            and (
-                prefs.litellm_provider == "ollama"
-                and prefs.ollama_endpoint
-                and prefs.ollama_model_name
-            )
-            or (
-                prefs.litellm_provider == "huggingface"
-                and prefs.huggingface_model_name
-            )
-        )
-
-    def is_loaded(self):
-        return self.client is not None
-
-    def load(self):
-        prefs = bpy.context.preferences.addons[__package__].preferences
-        api_base = None
-        api_key = None
-        model_name = None
-
-        if prefs.litellm_provider == "ollama":
-            api_base = prefs.ollama_endpoint
-            model_name = prefs.ollama_model_name
-        elif prefs.litellm_provider == "huggingface":
-            api_key = prefs.huggingface_api_key
-            api_base = prefs.huggingface_endpoint
-            model_name = prefs.huggingface_model_name
-
-        api_key = api_key if api_key else None
-        api_base = api_base if api_base else None
-
-        print(f"Loading LiteLLM with model: {model_name}")
-        try:
-            import litellm
-
-            if api_key:
-                litellm.api_key = api_key
-
-            if api_base:
-                litellm.api_base = api_base
-
-            self.client = True
-            print("LiteLLM loaded successfully")
-        except Exception as e:
-            print(f"Failed to load LiteLLM: {e}", file=sys.stderr)
-            raise
-
-    def create_chat_completion(self, messages, stream=True, temperature=0.9):
-        if not self.is_loaded():
-            raise RuntimeError("LiteLLM not loaded")
-
-        try:
-            import litellm
-
-            prefs = bpy.context.preferences.addons[__package__].preferences
-            provider = prefs.litellm_provider
-            model_name = prefs.litellm_model_name
-
-            model = f"{provider}/{model_name}"
-
-            kwargs = {
-                "model": model,
-                "messages": messages,
-                "stream": stream,
-                "temperature": temperature,
-            }
-
-            if provider == "ollama":
-                system_msgs = [msg for msg in messages if msg["role"] == "system"]
-                if system_msgs:
-                    kwargs["messages"] = [
-                        msg for msg in messages if msg["role"] != "system"
-                    ]
-                    kwargs["system"] = system_msgs[0]["content"]
-
-            return litellm.completion(**kwargs)
-        except Exception as e:
-            print(f"Error in LiteLLM completion: {e}", file=sys.stderr)
-            raise
-
-
-class MESHGEN_OT_DownloadModel(bpy.types.Operator):
-    bl_idname = "meshgen.download_model"
-    bl_label = "Download Model"
-    bl_description = "Download the recommended model from Hugging Face"
-    bl_options = {"REGISTER", "INTERNAL"}
-
-    repo_id: bpy.props.StringProperty(name="Repo ID")
-    filename: bpy.props.StringProperty(name="Filename")
-
-    _timer = None
-    _download_thread = None
-    _progress_queue = None
-
-    def execute(self, context):
-        import queue
-        import re
-        import sys
-        import threading
-
-        from huggingface_hub import hf_hub_download
-
-        self._progress_queue = queue.Queue()
-
-        class TqdmCapture:
-            def __init__(self, queue, stream):
-                self.queue = queue
-                self.stream = stream
-                self.original_write = stream.write
-                self.original_flush = stream.flush
-
-            def write(self, string):
-                match = re.search(r"\r.*?(\d+)%", string)
-                if match:
+    @classmethod
+    def reset(cls):
+        with cls._lock:
+            if cls._instance:
+                if hasattr(cls._instance, "model") and cls._instance.model:
                     try:
-                        percentage = int(match.group(1))
-                        self.queue.put(percentage)
-                    except Exception as e:
-                        self.queue.put(f"Error parsing progress: {string}, {e}")
-                self.original_write(string)
-                self.original_flush()
+                        del cls._instance.model
+                    except Exception:
+                        pass
 
-            def flush(self):
-                self.original_flush()
+                if hasattr(cls._instance, "agent") and cls._instance.agent:
+                    try:
+                        del cls._instance.agent
+                    except Exception:
+                        pass
 
-        def download_task():
-            try:
-                old_stderr = sys.stderr
-                sys.stderr = TqdmCapture(self._progress_queue, sys.stderr)
-                hf_hub_download(
-                    self.repo_id,
-                    filename=self.filename,
-                    local_dir=absolute_path("models"),
-                )
-                self._progress_queue.put("finished")
-            except Exception as e:
-                self._progress_queue.put(f"Error downloading model: {e}")
-            finally:
-                sys.stderr = old_stderr
+                cls._instance = None
 
-        prefs = context.preferences.addons[__package__].preferences
-        prefs.downloading = True
-        prefs.download_progress = 0
-
-        self._download_thread = threading.Thread(target=download_task)
-        self._download_thread.start()
-
-        wm = context.window_manager
-        self._timer = wm.event_timer_add(0.1, window=context.window)
-        wm.modal_handler_add(self)
-        return {"RUNNING_MODAL"}
-
-    def modal(self, context, event):
-        if event.type == "TIMER":
-            prefs = context.preferences.addons[__package__].preferences
-            model_manager = LocalModelManager.instance()
-            while not self._progress_queue.empty():
-                item = self._progress_queue.get()
-                if isinstance(item, (int, float)):
-                    prefs.download_progress = item
-                elif isinstance(item, str):
-                    if item == "finished":
-                        prefs.downloading = False
-                        model_manager.update_downloaded_models()
-                        for area in context.screen.areas:
-                            if area.type == "PREFERENCES" or area.type == "VIEW_3D":
-                                area.tag_redraw()
-                        self.cleanup(context)
-                        return {"FINISHED"}
-                    else:
-                        self.report({"ERROR"}, item)
-                        prefs.downloading = False
-                        model_manager.update_downloaded_models()
-                        for area in context.screen.areas:
-                            if area.type == "PREFERENCES" or area.type == "VIEW_3D":
-                                area.tag_redraw()
-                        self.cleanup(context)
-                        return {"CANCELLED"}
-
-            for area in context.screen.areas:
-                if area.type == "PREFERENCES":
-                    area.tag_redraw()
-
-            return {"RUNNING_MODAL"}
-        else:
-            return {"PASS_THROUGH"}
-
-    def cleanup(self, context):
-        if self._timer:
-            context.window_manager.event_timer_remove(self._timer)
-            self._timer = None
-
-    def cancel(self, context):
-        context.window_manager.event_timer_remove(self._timer)
-        return {"CANCELLED"}
-
-
-class MESHGEN_OT_SelectModel(bpy.types.Operator):
-    bl_idname = "meshgen.select_model"
-    bl_label = "Select Model"
-    bl_description = "Select the model to use for generation"
-    bl_options = {"REGISTER", "INTERNAL"}
-
-    model: bpy.props.StringProperty(name="Model")
-
-    def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
-        prefs.current_model = self.model
-        return {"FINISHED"}
-
-
-class MESHGEN_OT_OpenModelsFolder(bpy.types.Operator):
-    bl_idname = "meshgen.open_models_folder"
-    bl_label = "Open Models Folder"
-    bl_description = "Open the models directory in the file explorer"
-    bl_options = {"REGISTER", "INTERNAL"}
-
-    def execute(self, context):
-        models_dir = absolute_path("models")
-
-        if not os.path.exists(models_dir):
-            os.makedirs(models_dir)
-
-        try:
-            if os.name == "nt":
-                os.startfile(models_dir)
-            elif os.name == "posix":
-                import subprocess
-
-                opener = "open" if sys.platform == "darwin" else "xdg-open"
-                subprocess.run([opener, models_dir])
-        except Exception as e:
-            self.report({"ERROR"}, f"Failed to open models folder: {e}")
-            return {"CANCELLED"}
-
-        return {"FINISHED"}
-
-
-class MESHGEN_OT_RefreshModels(bpy.types.Operator):
-    bl_idname = "meshgen.refresh_models"
-    bl_label = "Refresh Models"
-    bl_description = "Refresh the list of downloaded models"
-    bl_options = {"REGISTER", "INTERNAL"}
-
-    def execute(self, context):
-        model_manager = LocalModelManager.instance()
-        model_manager.update_downloaded_models()
-        for area in bpy.context.screen.areas:
-            if area.type == "PREFERENCES" or area.type == "VIEW_3D":
-                area.tag_redraw()
-        return {"FINISHED"}
-
-
-def register():
-    bpy.utils.register_class(MESHGEN_OT_DownloadModel)
-    bpy.utils.register_class(MESHGEN_OT_SelectModel)
-    bpy.utils.register_class(MESHGEN_OT_OpenModelsFolder)
-    bpy.utils.register_class(MESHGEN_OT_RefreshModels)
-
-
-def unregister():
-    bpy.utils.unregister_class(MESHGEN_OT_DownloadModel)
-    bpy.utils.unregister_class(MESHGEN_OT_SelectModel)
-    bpy.utils.unregister_class(MESHGEN_OT_OpenModelsFolder)
-    bpy.utils.unregister_class(MESHGEN_OT_RefreshModels)
+        ToolManager.reset()
