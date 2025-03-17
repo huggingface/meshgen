@@ -1,10 +1,32 @@
 import bpy
 
-from .generator import Generator
+from .backend import Backend
+
+EVENT_LABELS = {
+    "THINKING": "Thinking...",
+    "STEP": "Step",
+    "ERROR": "Error",
+    "CANCELED": "Canceled",
+    "SUCCESS": "Finished",
+    "LOADING": "Loading...",
+    "LOADING_SUCCESS": "Loaded model",
+    "LOADING_ERROR": "Failed to load model",
+}
+
+EVENT_ICONS = {
+    "THINKING": "SORTTIME",
+    "STEP": "LIGHT",
+    "ERROR": "ERROR",
+    "CANCELED": "X",
+    "SUCCESS": "CHECKMARK",
+    "LOADING": "SORTTIME",
+    "LOADING_SUCCESS": "CHECKMARK",
+    "LOADING_ERROR": "ERROR",
+}
 
 
 class MESHGEN_PT_Panel(bpy.types.Panel):
-    bl_label = "Generate"
+    bl_label = "Chat"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "MeshGen"
@@ -12,48 +34,52 @@ class MESHGEN_PT_Panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         props = context.scene.meshgen_props
-        generator = Generator.instance()
 
-        if generator.is_backend_valid():
-            if props.vertices_generated > 0 or props.faces_generated > 0:
-                results_box = layout.box()
-                results_col = results_box.column(align=True)
-                results_col.label(text="Results", icon="INFO")
+        backend = Backend.instance()
+        if not backend.is_valid():
+            setup_box = layout.box()
+            setup_box.label(text="Finish setup in preferences.", icon="INFO")
 
-                if props.vertices_generated > 0:
-                    results_col.label(text=f"Vertices: {props.vertices_generated}")
-                if props.faces_generated > 0:
-                    results_col.label(text=f"Faces: {props.faces_generated}")
-
-                if not props.is_running:
-                    if props.cancelled:
-                        results_col.label(text="Cancelled", icon="X")
-                    else:
-                        results_col.label(text="Complete", icon="CHECKMARK")
-
-                layout.separator()
-
-            if props.is_running:
-                layout.label(text="Generation in progress...", icon="SORTTIME")
-                layout.operator("meshgen.cancel", text="Cancel", icon="X")
-            else:
-                settings_box = layout.box()
-                settings_box.label(text="Settings", icon="SETTINGS")
-                settings_box.prop(props, "prompt")
-                settings_box.prop(props, "temperature", slider=True)
-
-                layout.separator()
-
-                generate_row = layout.row()
-                generate_row.scale_y = 1.2
-                generate_row.operator("meshgen.generate", text="Generate", icon="PLAY")
-        else:
-            error_box = layout.box()
-
-            error_box.label(text="Invalid configuration", icon="ERROR")
-            error_box.operator(
-                "preferences.addon_show", text="Open Preferences"
+            preferences_row = layout.row()
+            preferences_row.scale_y = 1.2
+            preferences_row.operator(
+                "preferences.addon_show", text="Open Preferences", icon="SETTINGS"
             ).module = __package__
+
+            return
+
+        # User
+        user_box = layout.box()
+        user_box.label(text="You", icon="USER")
+
+        if props.state == "READY":
+            user_box.prop(props, "prompt", text="")
+        else:
+            user_box.label(text=props.prompt)
+
+        action_row = user_box.row(align=True)
+        action_row.scale_y = 1.2
+        main_button_col = action_row.column(align=True)
+        if props.state == "READY":
+            main_button_col.operator("meshgen.chat", text="Submit", icon="PLAY")
+        elif props.state == "LOADING" or props.state == "RUNNING":
+            main_button_col.operator("meshgen.cancel_chat", text="Cancel", icon="X")
+        log_button_col = action_row.column(align=True)
+        log_button_col.operator("meshgen.open_log", text="", icon="TEXT")
+
+        # Agent
+        if not props.history:
+            return
+
+        layout.separator()
+        agent_box = layout.box()
+        agent_box.label(text="Agent", icon="LIGHT")
+
+        for event in props.history:
+            event_box = agent_box.box()
+            event_box.label(text=EVENT_LABELS[event.type], icon=EVENT_ICONS[event.type])
+            if event.content:
+                event_box.label(text=event.content)
 
 
 def register():

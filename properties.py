@@ -1,52 +1,58 @@
 import bpy
 
 
-class MeshGenProperties(bpy.types.PropertyGroup):
+class MeshGenEvent(bpy.types.PropertyGroup):
     __annotations__ = {
-        "prompt": bpy.props.StringProperty(
-            name="Prompt",
-            description="Prompt for the mesh generation.",
-            default="Create a 3D obj file using the following description: a desk",
+        "type": bpy.props.EnumProperty(
+            name="Type",
+            description="The type of event",
+            items=[
+                ("THINKING", "Thinking", "The agent is thinking"),
+                ("STEP", "Step", "A step in the agent's thought process"),
+                ("ERROR", "Error", "An error occurred"),
+                ("CANCELED", "Canceled", "The operation was canceled by the user"),
+                ("SUCCESS", "Result", "The result of the operation"),
+                ("LOADING", "Loading", "The model is loading"),
+                ("LOADING_SUCCESS", "Loaded", "The model loaded successfully"),
+                ("LOADING_ERROR", "Error", "The model failed to load"),
+            ],
         ),
-        "is_running": bpy.props.BoolProperty(
-            name="Is Running",
-            description="Whether the mesh generation is running.",
-            default=False,
-        ),
-        "generated_text": bpy.props.StringProperty(
-            name="Generated Text",
-            description="The generated text.",
+        "content": bpy.props.StringProperty(
+            name="Content",
+            description="The content of the event",
             default="",
-        ),
-        "cancelled": bpy.props.BoolProperty(
-            name="Cancelled",
-            description="Whether the mesh generation was cancelled.",
-            default=False,
-        ),
-        "temperature": bpy.props.FloatProperty(
-            name="Temperature",
-            description="The temperature for the mesh generation. 0.0 is deterministic, 1.0 is random.",
-            default=0.9,
-            min=0.0,
-            max=1.0,
-        ),
-        "vertices_generated": bpy.props.IntProperty(
-            name="Vertices Generated",
-            description="The number of vertices generated.",
-            default=0,
-        ),
-        "faces_generated": bpy.props.IntProperty(
-            name="Faces Generated",
-            description="The number of faces generated.",
-            default=0,
         ),
     }
 
 
+class MeshGenProperties(bpy.types.PropertyGroup):
+    __annotations__ = {
+        "prompt": bpy.props.StringProperty(
+            name="Prompt",
+            description="Enter a request for the AI agent",
+            default="Create a cube",
+        ),
+        "state": bpy.props.EnumProperty(
+            name="State",
+            description="The current state of the agent",
+            items=[
+                ("READY", "Ready", "The agent is ready to process a request"),
+                ("LOADING", "Loading", "The agent is loading"),
+                ("RUNNING", "Running", "The agent is running"),
+                ("CANCELED", "Canceled", "The operation is flagged for cancellation"),
+            ],
+            default="READY",
+        ),
+        "history": bpy.props.CollectionProperty(type=MeshGenEvent),
+    }
+
+
 def register():
+    bpy.utils.register_class(MeshGenEvent)
     bpy.utils.register_class(MeshGenProperties)
     bpy.types.Scene.meshgen_props = bpy.props.PointerProperty(type=MeshGenProperties)
 
 
 def unregister():
+    bpy.utils.unregister_class(MeshGenEvent)
     bpy.utils.unregister_class(MeshGenProperties)
