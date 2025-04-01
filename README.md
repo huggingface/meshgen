@@ -1,6 +1,6 @@
 # MeshGen
 
-A Blender addon for generating meshes with AI.
+Use AI Agents directly in Blender.
 
 ![meshgen](docs/meshgen.gif)
 
@@ -13,8 +13,8 @@ Go to the [Latest Release](https://github.com/huggingface/meshgen/releases/lates
 # Usage
 
 -   Press `N` -> `MeshGen` (or `View` -> `Sidebar` -> Select the `MeshGen` tab)
--   Enter a prompt, for example: `Create a 3D obj file using the following description: a desk`
--   Click `Generate Mesh`
+-   Enter a prompt, for example: `Create a snowman`
+-   Click `Submit`
 
 # Troubleshooting
 

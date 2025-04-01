@@ -294,7 +294,7 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
             hyper3d_box.label(text="Hyper3D", icon="PACKAGE")
 
             hyper3d_box.label(
-                text="Use Hyper3D API for mesh generation",
+                text="Use Hyper3D (Rodin) API for mesh generation.",
             )
 
             hyper3d_box.prop(self, "enable_hyper3d")
