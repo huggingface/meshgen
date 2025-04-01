@@ -1,5 +1,5 @@
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-llama_cpp_python==0.3.4
+llama_cpp_python==0.3.2
 
 mathutils
 smolagents[litellm]
