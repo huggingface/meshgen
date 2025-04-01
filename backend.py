@@ -151,7 +151,7 @@ class Backend:
                 "pathlib",
                 "typing",
             ],
-            add_base_tools=True,
+            add_base_tools=False,
             verbosity_level=LogLevel.DEBUG,
         )
 
