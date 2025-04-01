@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 
 import bpy
 import mathutils
-from smolagents import Tool
+from smolagents import FinalAnswerTool, PythonInterpreterTool, Tool
 
 
 class ToolManager:
@@ -29,6 +29,8 @@ class ToolManager:
         self._result_dict = {}
         self._condition = threading.Condition()
         self._tools = [
+            PythonInterpreterTool(),
+            FinalAnswerTool(),
             GetSceneInfoTool(),
             GetObjectInfoTool(),
             CreateObjectTool(),
