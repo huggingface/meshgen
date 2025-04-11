@@ -192,6 +192,12 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
         backend_box.label(text="Backend", icon="SETTINGS")
         backend_box.prop(self, "backend_type", expand=True)
 
+        info_box = backend_box.box()
+        info_box.label(
+            text="Local backend requires at least 8GB VRAM to run on GPU. For lower-end machines and to run larger models, Remote backend is recommended.",
+            icon="INFO",
+        )
+
         if self.backend_type == "LOCAL":
             local_box = layout.box()
 
