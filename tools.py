@@ -67,21 +67,16 @@ class ToolManager:
         try:
             while True:
                 task = self._task_queue.get_nowait()
-                task_type = task["type"]
+                func = task["func"]
                 params = task.get("params") or {}
 
-                tool_class = next(
-                    (tool for tool in self._tools if tool.name == task_type),
-                    None,
-                )
-
-                if tool_class and tool_class._main_thread_handler:
-                    result = tool_class._main_thread_handler(context, **params)
+                if callable(func):
+                    result = func(context, **params)
                     with self._condition:
                         self._result_dict[task["id"]] = result
                         self._condition.notify_all()
                 else:
-                    raise ValueError(f"Unknown task type: {task_type}")
+                    raise ValueError(f"Task function {func} is not callable")
         except queue.Empty:
             pass
 
@@ -94,44 +89,25 @@ class ToolManager:
         cls._instance = None
 
 
-def blender_main_thread_handler(main_thread_func):
-    """Decorator to associate a main thread function with a tool."""
-
-    def wrapper(tool_class):
-        tool_class._main_thread_handler = staticmethod(main_thread_func)
-        return tool_class
-
-    return wrapper
-
-
 class BlenderTool(Tool):
     """
     Base class for all Blender tools.
 
-    Uses task manager to execute tasks in the main blender context.
+    Provides utility method to run functions on the main blender thread.
     """
 
-    _main_thread_handler = None
-
-    def __init__(self):
-        super().__init__()
-        if not self._main_thread_handler:
-            raise ValueError(
-                f"No main thread handler set for {self.__class__.__name__}"
-            )
-
-    def _execute_task(self, task_type: str, params: dict = None) -> str:
+    def run_main_thread_func(self, func: callable, params: dict = None) -> str:
         task_id = str(uuid.uuid4())
         task = {
             "id": task_id,
-            "type": task_type,
+            "func": func,
             "params": params,
         }
         tool_manager = ToolManager.instance()
         tool_manager.add_task(task)
         result = tool_manager.get_result(task_id)
         if result["status"] == "error":
-            return f"Error in {task_type}: {result['data']}"
+            return f"Error in {func.__name__}: {result['data']}"
         return result["data"]
 
 
@@ -185,7 +161,6 @@ def get_scene_info(context: Any):
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(get_scene_info)
 class GetSceneInfoTool(BlenderTool):
     name = "get_scene_info"
     description = """
@@ -223,7 +198,7 @@ class GetSceneInfoTool(BlenderTool):
     output_type = "object"
 
     def forward(self):
-        return self._execute_task("get_scene_info")
+        return self.run_main_thread_func(get_scene_info)
 
 
 def get_object_info(context: Any, name: str):
@@ -269,7 +244,6 @@ def get_object_info(context: Any, name: str):
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(get_object_info)
 class GetObjectInfoTool(BlenderTool):
     name = "get_object_info"
     description = """
@@ -298,7 +272,7 @@ class GetObjectInfoTool(BlenderTool):
     output_type = "object"
 
     def forward(self, name: str):
-        return self._execute_task("get_object_info", {"name": name})
+        return self.run_main_thread_func(get_object_info, {"name": name})
 
 
 def create_object(
@@ -434,7 +408,6 @@ def create_object(
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(create_object)
 class CreateObjectTool(BlenderTool):
     name = "create_object"
     description = """
@@ -571,7 +544,7 @@ class CreateObjectTool(BlenderTool):
                 }
             )
 
-        return self._execute_task("create_object", params)
+        return self.run_main_thread_func(create_object, params)
 
 
 def modify_object(
@@ -630,7 +603,6 @@ def modify_object(
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(modify_object)
 class ModifyObjectTool(BlenderTool):
     name = "modify_object"
     description = """
@@ -693,7 +665,7 @@ class ModifyObjectTool(BlenderTool):
             "scale": scale,
             "visible": visible,
         }
-        return self._execute_task("modify_object", params)
+        return self.run_main_thread_func(modify_object, params)
 
 
 def delete_object(context: Any, name: str) -> dict:
@@ -720,7 +692,6 @@ def delete_object(context: Any, name: str) -> dict:
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(delete_object)
 class DeleteObjectTool(BlenderTool):
     name = "delete_object"
     description = """
@@ -737,7 +708,7 @@ class DeleteObjectTool(BlenderTool):
     output_type = "string"
 
     def forward(self, name: str):
-        return self._execute_task("delete_object", {"name": name})
+        return self.run_main_thread_func(delete_object, {"name": name})
 
 
 def set_material(
@@ -815,7 +786,6 @@ def set_material(
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(set_material)
 class SetMaterialTool(BlenderTool):
     name = "set_material"
     description = """
@@ -866,7 +836,7 @@ class SetMaterialTool(BlenderTool):
             "create_if_missing": create_if_missing,
             "color": color,
         }
-        return self._execute_task("set_material", params)
+        return self.run_main_thread_func(set_material, params)
 
 
 class LlamaMeshModelManager:
@@ -922,9 +892,7 @@ class LlamaMeshModelManager:
         return cls()
 
 
-def llama_mesh_generate(
-    context: Any, object_name: str, object_description: str, temperature: float = 0.5
-):
+def llama_mesh_generate(context: Any, object_name: str, mesh_data: str):
     try:
         import bmesh
 
@@ -938,30 +906,10 @@ def llama_mesh_generate(
         override["area"] = view_area_3d
 
         with context.temp_override(**override):
-            model_manager = LlamaMeshModelManager.instance()
-            model = model_manager.get_model()
-
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a 3D mesh generator. You will be given a description of a 3D object and generate an obj file.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Generate an obj file for the following description: {object_description}",
-                },
-            ]
-
-            response = model.create_chat_completion(
-                messages=messages, stream=True, temperature=temperature
-            )
-
-            mesh_data = bpy.data.meshes.new(object_name)
-            mesh_obj = bpy.data.objects.new(object_name, mesh_data)
+            mesh_data_obj = bpy.data.meshes.new(object_name)
+            mesh_obj = bpy.data.objects.new(object_name, mesh_data_obj)
             context.collection.objects.link(mesh_obj)
             bm = bmesh.new()
-
-            line_buffer = ""
 
             def add_vertex(x, y, z):
                 try:
@@ -977,8 +925,11 @@ def llama_mesh_generate(
                     bm.faces.new((bm.verts[a - 1], bm.verts[b - 1], bm.verts[c - 1]))
                     bm.faces.ensure_lookup_table()
                     return True
+                except IndexError as e:
+                    print(f"IndexError adding face: ({a}, {b}, {c}): {e}")
+                    return False
                 except ValueError as e:
-                    print(f"Error adding face: ({a}, {b}, {c}): {e}")
+                    print(f"ValueError adding face: ({a}, {b}, {c}): {e}")
                     return False
 
             def process_line(line):
@@ -1005,26 +956,11 @@ def llama_mesh_generate(
                         except ValueError:
                             pass
 
-            for chunk in response:
-                try:
-                    content = chunk["choices"][0]["delta"].get("content", "")
-                    if content:
-                        line_buffer += content
+            for line in mesh_data.splitlines():
+                process_line(line)
 
-                        if "\n" in line_buffer:
-                            lines = line_buffer.split("\n")
-                            for line in lines[:-1]:
-                                process_line(line)
-                            line_buffer = lines[-1]
-                except Exception as e:
-                    print(f"Error in process_chunk: {str(e)}")
-                    pass
-
-            if line_buffer:
-                process_line(line_buffer)
-
-            bm.to_mesh(mesh_data)
-            mesh_data.update()
+            bm.to_mesh(mesh_data_obj)
+            mesh_data_obj.update()
             context.view_layer.update()
             bm.free()
 
@@ -1035,7 +971,6 @@ def llama_mesh_generate(
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(llama_mesh_generate)
 class LlamaMeshGenerateTool(BlenderTool):
     name = "llama_mesh_generate"
     description = """
@@ -1052,7 +987,7 @@ class LlamaMeshGenerateTool(BlenderTool):
         },
         "object_description": {
             "type": "string",
-            "description": "Description of the mesh to generate",
+            "description": "A short description of the mesh to generate",
         },
         "temperature": {
             "type": "number",
@@ -1068,19 +1003,43 @@ class LlamaMeshGenerateTool(BlenderTool):
         object_description: str,
         temperature: Optional[float] = 0.5,
     ):
-        params = {
-            "object_name": object_name,
-            "object_description": object_description,
-            "temperature": temperature,
-        }
-        return self._execute_task("llama_mesh_generate", params)
-
-
-def llama_mesh_describe(context: Any, name: str):
-    try:
         model_manager = LlamaMeshModelManager.instance()
         model = model_manager.get_model()
 
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that can generate 3D meshes from descriptions.",
+            },
+            {
+                "role": "user",
+                "content": f"Generate an obj file for the following description: {object_description}",
+            },
+        ]
+
+        response = model.create_chat_completion(
+            messages=messages, stream=True, temperature=temperature
+        )
+
+        mesh_data = ""
+        for chunk in response:
+            try:
+                content = chunk["choices"][0]["delta"].get("content", "")
+                if content:
+                    mesh_data += content
+            except Exception as e:
+                print(f"Error in process_chunk: {str(e)}")
+                pass
+
+        params = {
+            "object_name": object_name,
+            "mesh_data": mesh_data,
+        }
+        return self.run_main_thread_func(llama_mesh_generate, params)
+
+
+def get_mesh_obj_data(context: Any, name: str):
+    try:
         obj = bpy.data.objects.get(name)
         if not obj:
             raise ValueError(f"Object with name {name} not found")
@@ -1141,34 +1100,13 @@ def llama_mesh_describe(context: Any, name: str):
 
         obj_data = "\n".join(obj_lines)
 
-        messages = [
-            {
-                "role": "system",
-                "content": """You are a knowledgeable, efficient, and direct AI assistant that can read 3D obj file data.
-                Provide concise answers, focusing only on key information needed.
-                """,
-            },
-            {
-                "role": "user",
-                "content": f"What is this object?\n{obj_data}",
-            },
-        ]
-
-        response = model.create_chat_completion(
-            messages=messages, stream=False, temperature=0.5
-        )
-
-        response = response["choices"][0]["message"]["content"]
-
-        return {"status": "success", "data": response}
-
+        return {"status": "success", "data": obj_data}
     except Exception as e:
-        print(f"Error in llama_mesh_understand: {str(e)}")
+        print(f"Error in llama_mesh_describe: {str(e)}")
         traceback.print_exc()
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(llama_mesh_describe)
 class LlamaMeshDescribeTool(BlenderTool):
     name = "llama_mesh_describe"
     description = """
@@ -1187,158 +1125,185 @@ class LlamaMeshDescribeTool(BlenderTool):
     output_type = "string"
 
     def forward(self, name: str):
-        params = {"name": name}
-        return self._execute_task("llama_mesh_describe", params)
+        try:
+            model_manager = LlamaMeshModelManager.instance()
+            model = model_manager.get_model()
 
+            obj_data = self.run_main_thread_func(get_mesh_obj_data, {"name": name})
 
-def _clean_imported_glb(filepath, mesh_name=None):
-    existing_objects = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=filepath)
-    bpy.context.view_layer.update()
+            messages = [
+                {
+                    "role": "system",
+                    "content": """You are a knowledgeable, efficient, and direct AI assistant that can read 3D obj file data.
+                    Provide concise answers, focusing only on key information needed.
+                    """,
+                },
+                {
+                    "role": "user",
+                    "content": f"What is this object?\n{obj_data}",
+                },
+            ]
 
-    imported_objects = list(set(bpy.data.objects) - existing_objects)
-
-    if not imported_objects:
-        raise RuntimeError("Error: No objects were imported.")
-
-    mesh_obj = None
-
-    if len(imported_objects) == 1 and imported_objects[0].type == "MESH":
-        mesh_obj = imported_objects[0]
-        print("Single mesh imported, no cleanup needed.")
-    else:
-        parent_obj = imported_objects[0]
-        if parent_obj.type == "EMPTY" and len(parent_obj.children) == 1:
-            potential_mesh = parent_obj.children[0]
-            if potential_mesh.type == "MESH":
-                print("GLB structure confirmed: Empty node with one mesh child.")
-                potential_mesh.parent = None
-
-                bpy.data.objects.remove(parent_obj)
-                print("Removed empty node, keeping only the mesh.")
-                mesh_obj = potential_mesh
-            else:
-                raise RuntimeError("Error: Child is not a mesh object.")
-        else:
-            raise RuntimeError(
-                "Error: Expected an empty node with one mesh child or a single mesh object."
+            response = model.create_chat_completion(
+                messages=messages, stream=False, temperature=0.5
             )
 
+            response = response["choices"][0]["message"]["content"]
+
+            return response
+        except Exception as e:
+            return f"Error in llama_mesh_describe: {str(e)}"
+
+
+def hyper3d_get_api_key(context: Any):
     try:
-        if mesh_obj and mesh_obj.name is not None and mesh_name:
-            mesh_obj.name = mesh_name
-            if mesh_obj.data.name is not None:
-                mesh_obj.data.name = mesh_name
-            print(f"Mesh renamed to: {mesh_name}")
-    except Exception:
-        print("Having issue with renaming, give up renaming.")
-
-    return mesh_obj
-
-
-def hyper3d_generate_object(context: Any, object_description: str, mesh_name: str):
-    try:
-        import os
-        import tempfile
-        import time
-
-        import requests
-
         prefs = bpy.context.preferences.addons[__package__].preferences
-        api_key = prefs.hyper3d_api_key
+        return {"status": "success", "data": prefs.hyper3d_api_key}
+    except Exception as e:
+        return {"status": "error", "data": str(e)}
 
-        files = [
-            ("mesh_mode", (None, "Raw")),
-            ("prompt", (None, object_description)),
-        ]
+
+def hyper3d_run_api(api_key: str, object_description: str):
+    import os
+    import tempfile
+    import time
+
+    import requests
+
+    files = [
+        ("mesh_mode", (None, "Raw")),
+        ("prompt", (None, object_description)),
+    ]
+
+    response = requests.post(
+        "https://hyperhuman.deemos.com/api/v2/rodin",
+        headers={"Authorization": f"Bearer {api_key}"},
+        files=files,
+    )
+
+    data = response.json()
+
+    succeed = data.get("submit_time", False)
+    if not succeed:
+        raise RuntimeError("Failed to create generate job")
+
+    task_uuid = data["uuid"]
+    subscription_key = data["jobs"]["subscription_key"]
+
+    start_time = time.time()
+    max_wait_time = 300  # 5 minutes
+
+    print(f"Generation started. Task UUID: {task_uuid}")
+    print(f"Waiting up to {max_wait_time} seconds for generation to complete...")
+
+    while True:
+        if time.time() - start_time > max_wait_time:
+            raise RuntimeError(f"Generation timed out after {max_wait_time} seconds")
 
         response = requests.post(
-            "https://hyperhuman.deemos.com/api/v2/rodin",
+            "https://hyperhuman.deemos.com/api/v2/status",
             headers={"Authorization": f"Bearer {api_key}"},
-            files=files,
+            json={"subscription_key": subscription_key},
         )
 
         data = response.json()
+        status_list = [i["status"] for i in data["jobs"]]
+        if all(status == "Done" for status in status_list):
+            break
 
-        succeed = data.get("submit_time", False)
-        if not succeed:
-            raise RuntimeError("Failed to create generate job")
+        time.sleep(2)
 
-        task_uuid = data["uuid"]
-        subscription_key = data["jobs"]["subscription_key"]
+    print("Generation completed. Downloading result...")
 
-        start_time = time.time()
-        max_wait_time = 300  # 5 minutes
+    response = requests.post(
+        "https://hyperhuman.deemos.com/api/v2/download",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"task_uuid": task_uuid},
+    )
 
-        print(f"Generation started. Task UUID: {task_uuid}")
-        print(f"Waiting up to {max_wait_time} seconds for generation to complete...")
+    data = response.json()
+    temp_file = None
 
-        while True:
-            if time.time() - start_time > max_wait_time:
-                raise RuntimeError(
-                    f"Generation timed out after {max_wait_time} seconds"
-                )
-
-            response = requests.post(
-                "https://hyperhuman.deemos.com/api/v2/status",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"subscription_key": subscription_key},
+    for i in data["list"]:
+        if i["name"].endswith(".glb"):
+            temp_file = tempfile.NamedTemporaryFile(
+                delete=False,
+                prefix=task_uuid,
+                suffix=".glb",
             )
 
-            data = response.json()
-            status_list = [i["status"] for i in data["jobs"]]
-            if all(status == "Done" for status in status_list):
-                break
+            try:
+                response = requests.get(i["url"], stream=True)
+                response.raise_for_status()
 
-            time.sleep(2)
+                for chunk in response.iter_content(chunk_size=8192):
+                    temp_file.write(chunk)
 
-        print("Generation completed. Downloading result...")
+                temp_file.close()
+            except Exception as e:
+                temp_file.close()
+                os.unlink(temp_file.name)
+                raise e
 
-        response = requests.post(
-            "https://hyperhuman.deemos.com/api/v2/download",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"task_uuid": task_uuid},
-        )
+    return temp_file.name
 
-        data = response.json()
-        temp_file = None
 
-        for i in data["list"]:
-            if i["name"].endswith(".glb"):
-                temp_file = tempfile.NamedTemporaryFile(
-                    delete=False,
-                    prefix=task_uuid,
-                    suffix=".glb",
+def hyper3d_generate_object(context: Any, filepath: str, mesh_name: str):
+    try:
+        existing_objects = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=filepath)
+        bpy.context.view_layer.update()
+
+        imported_objects = list(set(bpy.data.objects) - existing_objects)
+
+        if not imported_objects:
+            raise RuntimeError("Error: No objects were imported.")
+
+        mesh_obj = None
+
+        if len(imported_objects) == 1 and imported_objects[0].type == "MESH":
+            mesh_obj = imported_objects[0]
+            print("Single mesh imported, no cleanup needed.")
+        else:
+            parent_obj = imported_objects[0]
+            if parent_obj.type == "EMPTY" and len(parent_obj.children) == 1:
+                potential_mesh = parent_obj.children[0]
+                if potential_mesh.type == "MESH":
+                    print("GLB structure confirmed: Empty node with one mesh child.")
+                    potential_mesh.parent = None
+
+                    bpy.data.objects.remove(parent_obj)
+                    print("Removed empty node, keeping only the mesh.")
+                    mesh_obj = potential_mesh
+                else:
+                    raise RuntimeError("Error: Child is not a mesh object.")
+            else:
+                raise RuntimeError(
+                    "Error: Expected an empty node with one mesh child or a single mesh object."
                 )
 
-                try:
-                    response = requests.get(i["url"], stream=True)
-                    response.raise_for_status()
-
-                    for chunk in response.iter_content(chunk_size=8192):
-                        temp_file.write(chunk)
-
-                    temp_file.close()
-                except Exception as e:
-                    temp_file.close()
-                    os.unlink(temp_file.name)
-                    raise e
-
-        obj = _clean_imported_glb(temp_file.name, mesh_name)
+        try:
+            if mesh_obj and mesh_obj.name is not None and mesh_name:
+                mesh_obj.name = mesh_name
+                if mesh_obj.data.name is not None:
+                    mesh_obj.data.name = mesh_name
+                print(f"Mesh renamed to: {mesh_name}")
+        except Exception:
+            print("Having issue with renaming, give up renaming.")
         result = {
-            "name": obj.name,
-            "type": obj.type,
-            "location": [obj.location.x, obj.location.y, obj.location.z],
+            "name": mesh_obj.name,
+            "type": mesh_obj.type,
+            "location": [mesh_obj.location.x, mesh_obj.location.y, mesh_obj.location.z],
             "rotation": [
-                obj.rotation_euler.x,
-                obj.rotation_euler.y,
-                obj.rotation_euler.z,
+                mesh_obj.rotation_euler.x,
+                mesh_obj.rotation_euler.y,
+                mesh_obj.rotation_euler.z,
             ],
-            "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+            "scale": [mesh_obj.scale.x, mesh_obj.scale.y, mesh_obj.scale.z],
         }
 
-        if obj.type == "MESH":
-            bounding_box = get_aabb(obj)
+        if mesh_obj.type == "MESH":
+            bounding_box = get_aabb(mesh_obj)
             result["world_bounding_box"] = bounding_box
 
         return {"status": "success", "data": result}
@@ -1348,7 +1313,6 @@ def hyper3d_generate_object(context: Any, object_description: str, mesh_name: st
         return {"status": "error", "data": str(e)}
 
 
-@blender_main_thread_handler(hyper3d_generate_object)
 class Hyper3dGenerateObjectTool(BlenderTool):
     name = "hyper3d_generate_object"
     description = """
@@ -1375,5 +1339,12 @@ class Hyper3dGenerateObjectTool(BlenderTool):
     output_type = "object"
 
     def forward(self, object_description: str, mesh_name: str):
-        params = {"object_description": object_description, "mesh_name": mesh_name}
-        return self._execute_task("hyper3d_generate_object", params)
+        try:
+            api_key = self.run_main_thread_func(hyper3d_get_api_key)
+            filepath = hyper3d_run_api(api_key, object_description)
+            return self.run_main_thread_func(
+                hyper3d_generate_object,
+                {"filepath": filepath, "mesh_name": mesh_name},
+            )
+        except Exception as e:
+            return f"Error in hyper3d_generate_object: {str(e)}"

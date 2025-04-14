@@ -48,7 +48,7 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
                     "Use a remote API for inference (Ollama, OpenAI, etc.)",
                 ),
             ],
-            default="LOCAL",
+            default="REMOTE",
             update=reset_backend,
         ),
         "current_model": bpy.props.EnumProperty(
@@ -74,11 +74,11 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
                 (
                     "huggingface",
                     "Hugging Face",
-                    "Use Hugging Face for remote inference",
+                    "Use the Hugging Face API for inference",
                 ),
-                ("ollama", "Ollama", "Use Ollama for remote inference"),
-                ("anthropic", "Anthropic", "Use Anthropic API for remote inference"),
-                ("openai", "OpenAI", "Use OpenAI API for remote inference"),
+                ("ollama", "Ollama", "Use an Ollama server for inference"),
+                ("anthropic", "Anthropic", "Use the Anthropic API for inference"),
+                ("openai", "OpenAI", "Use the OpenAI API for inference"),
             ],
             default="huggingface",
             update=reset_backend,
@@ -190,9 +190,16 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
 
         backend_box = layout.box()
         backend_box.label(text="Backend", icon="SETTINGS")
+
         backend_box.prop(self, "backend_type", expand=True)
 
         if self.backend_type == "LOCAL":
+            info_box = backend_box.box()
+            info_box.label(text="Run models directly in Blender.", icon="INFO")
+            col = info_box.column(align=True)
+            col.label(text="Requires at least 8GB VRAM.")
+            col.label(text="Small local models may struggle with agentic behaviors.")
+
             local_box = layout.box()
 
             header = local_box.row(align=True)
@@ -225,19 +232,62 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
             remote_box.separator()
 
             if self.llm_provider == "ollama":
+                info_box = remote_box.box()
+                info_box.label(
+                    text="Run models with a local Ollama server.", icon="INFO"
+                )
+                col = info_box.column(align=True)
+                col.label(text="1. Download and install Ollama from ollama.com")
+                col.label(text="2. Run `ollama serve` in the terminal")
+
+                remote_box.separator()
+
                 remote_box.prop(self, "ollama_endpoint")
                 remote_box.prop(self, "ollama_model_name")
                 remote_box.prop(self, "ollama_api_key")
 
             elif self.llm_provider == "huggingface":
+                info_box = remote_box.box()
+                info_box.label(
+                    text="Run models with the Hugging Face API.", icon="INFO"
+                )
+                col = info_box.column(align=True)
+                col.label(text="1. Create an account on hf.co")
+                col.label(text="2. Go to hf.co/settings/tokens and create a new token")
+                col.label(text="3. Paste the token into the API key field")
+
+                remote_box.separator()
+
                 remote_box.prop(self, "huggingface_model_id")
                 remote_box.prop(self, "huggingface_api_key")
 
             elif self.llm_provider == "anthropic":
+                info_box = remote_box.box()
+                info_box.label(text="Run models with the Anthropic API.", icon="INFO")
+                col = info_box.column(align=True)
+                col.label(text="1. Create an account on console.anthropic.com")
+                col.label(
+                    text="2. Go to console.anthropic.com/settings/keys and create a key"
+                )
+                col.label(text="3. Paste the key into the API key field")
+
+                remote_box.separator()
+
                 remote_box.prop(self, "anthropic_model_id")
                 remote_box.prop(self, "anthropic_api_key")
 
             elif self.llm_provider == "openai":
+                info_box = remote_box.box()
+                info_box.label(text="Run models with the OpenAI API.", icon="INFO")
+                col = info_box.column(align=True)
+                col.label(text="1. Create an account on platform.openai.com")
+                col.label(
+                    text="2. Go to platform.openai.com/api-keys and create a new secret key"
+                )
+                col.label(text="3. Paste the secret key into the API key field")
+
+                remote_box.separator()
+
                 remote_box.prop(self, "openai_model_id")
                 remote_box.prop(self, "openai_api_key")
 
@@ -282,10 +332,12 @@ class MeshGenPreferences(bpy.types.AddonPreferences):
                     "meshgen.unload_llama_mesh", text="Unload LLaMA-Mesh", icon="X"
                 )
             else:
-                llama_mesh_box.label(
-                    text="Requires 5GB VRAM. Not recommended when using local backend.",
-                    icon="ERROR",
-                )
+                if self.backend_type == "LOCAL":
+                    llama_mesh_box.label(
+                        text="Requires 5GB additional VRAM. Not recommended with local backend.",
+                        icon="ERROR",
+                    )
+
                 llama_mesh_box.operator(
                     "meshgen.load_llama_mesh", text="Load LLaMA-Mesh", icon="IMPORT"
                 )

@@ -49,6 +49,26 @@ class MESHGEN_OT_Chat(bpy.types.Operator):
                                 space.top = 0
                                 break
 
+        log_open = False
+        for window in context.window_manager.windows:
+            for area in window.screen.areas:
+                if area.type != "TEXT_EDITOR":
+                    continue
+                for space in area.spaces:
+                    if space.type == "TEXT_EDITOR" and space.text == self.log_text:
+                        log_open = True
+                        break
+                if log_open:
+                    break
+            if log_open:
+                break
+
+        if not log_open:
+            bpy.ops.screen.area_split(direction="VERTICAL")
+            new_area = context.screen.areas[-1]
+            new_area.type = "TEXT_EDITOR"
+            new_area.spaces.active.text = self.log_text
+
         self.log_text.write("\n----- New Chat -----\n")
         self.log_text.write(f"Prompt: {self.prompt}\n")
 

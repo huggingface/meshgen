@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "meshgen"
-version = "0.7.0"
+version = "0.7.1"
 name = "meshgen"
 tagline = "A Blender addon for generating meshes with AI"
 maintainer = "Hugging Face"
