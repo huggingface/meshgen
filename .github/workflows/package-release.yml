@@ -5,8 +5,12 @@ on:
             - "releases/**"
     workflow_dispatch:
 
+permissions: {}
+
 jobs:
     build-and-package:
+        permissions:
+          contents: read
         strategy:
             matrix:
                 platform:
