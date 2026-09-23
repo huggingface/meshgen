@@ -53,12 +53,12 @@ jobs:
         runs-on: ${{ matrix.platform.os }}
         steps:
             - name: Checkout repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
               with:
                   path: meshgen
 
             - name: Setup Python
-              uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c  # v4
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
               with:
                   python-version: "3.11"
 
@@ -135,7 +135,7 @@ jobs:
                   echo "Artifact created: meshgen-${{ matrix.platform.filename }}.zip"
 
             - name: Archive and upload artifact
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
               with:
                   name: meshgen-${{ matrix.platform.filename }}
                   path: meshgen-${{ matrix.platform.filename }}.zip
