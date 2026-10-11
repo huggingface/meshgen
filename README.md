@@ -135,3 +135,54 @@ This may take several minutes per mesh.
     -   Windows: In Blender, go to `Window` -> `Toggle System Console`
     -   Mac/Linux: Launch Blender from the terminal
 -   Report errors in [Issues](https://github.com/huggingface/meshgen/issues)
+
+---
+
+## FAQ
+
+### What is MeshGen?
+
+MeshGen is a Blender addon that lets you **control Blender with natural language using AI Agents**. It focuses on AI as a tool, not a replacement for human creativity.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Natural Language** | Describe what you want to create |
+| **Multiple Backends** | Local & Remote inference options |
+| **Local Models** | llama.cpp, Ollama support |
+| **Remote APIs** | Hugging Face, Anthropic, OpenAI |
+| **LLaMA-Mesh** | Local mesh understanding |
+| **Hyper3D** | High-fidelity mesh generation |
+
+### Installation
+
+1. Download addon ZIP from [Latest Release](https://github.com/huggingface/meshgen/releases/latest)
+2. Blender → Edit → Preferences → Add-ons → Install from Disk
+3. Select downloaded ZIP file
+
+### Backend Options
+
+| Backend | Type | Requirements |
+|---------|------|--------------|
+| **llama.cpp** | Local | NVIDIA GPU, 8GB VRAM |
+| **Ollama** | Local Server | Ollama installed |
+| **Hugging Face** | Remote | HF API token |
+| **Anthropic** | Remote | Claude API key |
+| **OpenAI** | Remote | OpenAI API key |
+
+### Requirements
+
+- Blender 3.0+
+- For local: NVIDIA GPU with 8GB+ VRAM
+- For remote: API keys
+
+### License
+
+See repository for license details.
+
+### Help & Resources
+
+- [GitHub Releases](https://github.com/huggingface/meshgen/releases)
+- [Documentation](https://github.com/huggingface/meshgen/tree/main/docs)
+- [Issues](https://github.com/huggingface/meshgen/issues)
