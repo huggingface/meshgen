@@ -3,3 +3,4 @@ llama_cpp_python==0.3.2
 
 mathutils
 smolagents[litellm]
+litellm!=1.107.0
